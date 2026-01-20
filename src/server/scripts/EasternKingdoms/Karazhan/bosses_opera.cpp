@@ -1,33 +1,26 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Bosses_Opera
-SD%Complete: 90
-SDComment: Oz, Hood, and RAJ event implemented. RAJ event requires more testing.
-SDCategory: Karazhan
-EndScriptData */
-
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
-#include "TaskScheduler.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SpellInfo.h"
+#include "TaskScheduler.h"
 #include "karazhan.h"
 
 /***********************************/
@@ -159,7 +152,7 @@ struct boss_dorothee : public ScriptedAI
 {
     boss_dorothee(Creature* creature) : ScriptedAI(creature)
     {
-        SetCombatMovement(false);
+        me->SetCombatMovement(false);
         //this is kinda a big no-no. but it will prevent her from moving to chase targets. she should just cast her spells. in this case, since there is not really something to LOS her with or get out of range this would work. but a more elegant solution would be better
 
         instance = creature->GetInstanceScript();
@@ -941,7 +934,7 @@ struct boss_julianne : public ScriptedAI
 
     void DoAction(int32 action) override
     {
-        switch(action)
+        switch (action)
         {
             case ACTION_FAKING_DEATH:
                 isFakingDeath = false;
@@ -1138,7 +1131,7 @@ struct boss_romulo : public ScriptedAI
 
     void DoAction(int32 action) override
     {
-        switch(action)
+        switch (action)
         {
             case ACTION_FAKING_DEATH:
                 isFakingDeath = false;
@@ -1210,7 +1203,7 @@ struct boss_romulo : public ScriptedAI
 
         _scheduler.Schedule(15s, GROUP_COMBAT, [this](TaskContext context)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 1, 100, true))
+            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 100, true, false))
             {
                 if (target && !me->HasInArc(M_PI, target))
                 {

@@ -1,28 +1,30 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "GameObject.h"
 #include "GameObjectAI.h"
+#include "GameObjectScript.h"
 #include "InstanceScript.h"
 #include "Map.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "blackwing_lair.h"
 
 enum Emotes
@@ -116,7 +118,7 @@ public:
             return !victim->HasAura(SPELL_TIMELAPSE);
         }
 
-        void SetGUID(ObjectGuid guid, int32 id) override
+        void SetGUID(ObjectGuid const& guid, int32 id) override
         {
             if (id == GUID_LEVER_USER)
             {
@@ -186,11 +188,8 @@ public:
                             {
                                 DoCast(player, afflictionSpellID, true);
 
-                                if (player->HasAura(SPELL_BROODAF_BLUE) && player->HasAura(SPELL_BROODAF_BLACK) && player->HasAura(SPELL_BROODAF_RED) &&
-                                    player->HasAura(SPELL_BROODAF_BRONZE) && player->HasAura(SPELL_BROODAF_GREEN))
-                                {
+                                if (player->HasAllAuras(SPELL_BROODAF_BLUE, SPELL_BROODAF_BLACK, SPELL_BROODAF_RED, SPELL_BROODAF_BRONZE, SPELL_BROODAF_GREEN))
                                     DoCast(player, SPELL_CHROMATIC_MUT_1);
-                                }
                             }
                         }
                         events.ScheduleEvent(EVENT_AFFLICTION, 10s);
@@ -245,7 +244,7 @@ class go_chromaggus_lever : public GameObjectScript
                         if (Creature* creature = _instance->GetCreature(DATA_CHROMAGGUS))
                         {
                             creature->SetHomePosition(homePos);
-                            creature->GetMotionMaster()->MovePath(creature->GetEntry() * 10, false);
+                            creature->GetMotionMaster()->MoveWaypoint(creature->GetEntry() * 10, false);
                             creature->AI()->SetGUID(player->GetGUID(), GUID_LEVER_USER);
                         }
 

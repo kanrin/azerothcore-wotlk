@@ -1,25 +1,27 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "AchievementCriteriaScript.h"
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "ulduar.h"
 
 enum AssemblySpells
@@ -29,55 +31,35 @@ enum AssemblySpells
     SPELL_BERSERK                   = 47008,
 
     // Steelbreaker
-    SPELL_HIGH_VOLTAGE_10           = 61890,
-    SPELL_HIGH_VOLTAGE_25           = 63498,
-    SPELL_FUSION_PUNCH_10           = 61903,
-    SPELL_FUSION_PUNCH_25           = 63493,
-    SPELL_STATIC_DISRUPTION_10      = 61911,
-    SPELL_STATIC_DISRUPTION_25      = 63495,
-    SPELL_OVERWHELMING_POWER_10     = 64637,
-    SPELL_OVERWHELMING_POWER_25     = 61888,
+    SPELL_HIGH_VOLTAGE              = 61890,
+    SPELL_FUSION_PUNCH              = 61903,
+    SPELL_STATIC_DISRUPTION         = 61911,
+    SPELL_OVERWHELMING_POWER        = 64637,
     SPELL_ELECTRICAL_CHARGE         = 61902,
 
     // Runemaster Molgeim
     SPELL_SHIELD_OF_RUNES_BUFF      = 62277,
-    SPELL_SHIELD_OF_RUNES_10        = 62274,
-    SPELL_SHIELD_OF_RUNES_25        = 63489,
+    SPELL_SHIELD_OF_RUNES           = 62274,
     SPELL_RUNE_OF_POWER             = 61973,
-    SPELL_RUNE_OF_DEATH_10          = 62269,
-    SPELL_RUNE_OF_DEATH_25          = 63490,
+    SPELL_RUNE_OF_DEATH             = 62269,
     SPELL_RUNE_OF_SUMMONING         = 62273,
     SPELL_RUNE_OF_SUMMONING_SUMMON  = 62020,
-    SPELL_LIGHTNING_BLAST_10        = 62054,
-    SPELL_LIGHTNING_BLAST_25        = 63491,
+    SPELL_LIGHTNING_BLAST           = 62054,
     CREATURE_LIGHTNING_ELEMENTAL    = 32958,
     CREATURE_RUNE_OF_SUMMONING      = 33051,
     SPELL_RUNE_OF_POWER_OOC_CHANNEL = 61975,
 
     // Stormcaller Brundir
-    SPELL_CHAIN_LIGHTNING_10        = 61879,
-    SPELL_CHAIN_LIGHTNING_25        = 63479,
-    SPELL_OVERLOAD_10               = 61869,
-    SPELL_OVERLOAD_25               = 63481,
-    SPELL_LIGHTNING_WHIRL_10        = 61915,
-    SPELL_LIGHTNING_WHIRL_25        = 63483,
-    SPELL_LIGHTNING_TENDRILS_10     = 61887,
-    SPELL_LIGHTNING_TENDRILS_25     = 63486,
+    SPELL_CHAIN_LIGHTNING           = 61879,
+    SPELL_OVERLOAD                  = 61869,
+    SPELL_LIGHTNING_WHIRL           = 61915,
+    SPELL_LIGHTNING_WHIRL_TRIGG     = 61916,
+    SPELL_LIGHTNING_TENDRILS        = 61887,
+    SPELL_LIGHTNING_TENDRILS_2      = 61883,
     SPELL_STORMSHIELD               = 64187,
     SPELL_LIGHTNING_CHANNEL_PRE     = 61942,
-};
 
-#define SPELL_HIGH_VOLTAGE          RAID_MODE(SPELL_HIGH_VOLTAGE_10, SPELL_HIGH_VOLTAGE_25)
-#define SPELL_FUSION_PUNCH          RAID_MODE(SPELL_FUSION_PUNCH_10, SPELL_FUSION_PUNCH_25)
-#define SPELL_STATIC_DISRUPTION     RAID_MODE(SPELL_STATIC_DISRUPTION_10, SPELL_STATIC_DISRUPTION_25)
-#define SPELL_OVERWHELMING_POWER    RAID_MODE(SPELL_OVERWHELMING_POWER_10, SPELL_OVERWHELMING_POWER_25)
-#define SPELL_SHIELD_OF_RUNES       RAID_MODE(SPELL_SHIELD_OF_RUNES_10, SPELL_SHIELD_OF_RUNES_25)
-#define SPELL_RUNE_OF_DEATH         RAID_MODE(SPELL_RUNE_OF_DEATH_10, SPELL_RUNE_OF_DEATH_25)
-#define SPELL_LIGHTNING_BLAST       RAID_MODE(SPELL_LIGHTNING_BLAST_10, SPELL_LIGHTNING_BLAST_25)
-#define SPELL_CHAIN_LIGHTNING       RAID_MODE(SPELL_CHAIN_LIGHTNING_10, SPELL_CHAIN_LIGHTNING_25)
-#define SPELL_OVERLOAD              RAID_MODE(SPELL_OVERLOAD_10, SPELL_OVERLOAD_25)
-#define SPELL_LIGHTNING_WHIRL       RAID_MODE(SPELL_LIGHTNING_WHIRL_10, SPELL_LIGHTNING_WHIRL_25)
-#define SPELL_LIGHTNING_TENDRILS    RAID_MODE(SPELL_LIGHTNING_TENDRILS_10, SPELL_LIGHTNING_TENDRILS_25)
+};
 
 enum eEnums
 {
@@ -308,7 +290,7 @@ public:
 
         void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() != TYPEID_PLAYER)
+            if (!who->IsPlayer())
                 return;
 
             if (_phase == 3)
@@ -338,7 +320,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case EVENT_FUSION_PUNCH:
                     me->CastSpell(me->GetVictim(), SPELL_FUSION_PUNCH, false);
@@ -353,7 +335,7 @@ public:
                 case EVENT_OVERWHELMING_POWER:
                     Talk(SAY_STEELBREAKER_POWER);
                     me->CastSpell(me->GetVictim(), SPELL_OVERWHELMING_POWER, true);
-                    events.RepeatEvent(RAID_MODE(61000, 36000));
+                    events.Repeat(RAID_MODE(61s, 36s));
                     break;
                 case EVENT_ENRAGE:
                     Talk(SAY_STEELBREAKER_BERSERK);
@@ -416,7 +398,7 @@ public:
             if (pInstance)
                 pInstance->SetData(TYPE_ASSEMBLY, NOT_STARTED);
 
-            me->m_Events.AddEvent(new CastRunesEvent(*me), me->m_Events.CalculateTime(8000));
+            me->m_Events.AddEventAtOffset(new CastRunesEvent(*me), 8s);
         }
 
         void JustReachedHome() override
@@ -486,7 +468,7 @@ public:
 
         void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() != TYPEID_PLAYER)
+            if (!who->IsPlayer())
                 return;
 
             Talk(SAY_MOLGEIM_SLAY);
@@ -507,7 +489,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case EVENT_RUNE_OF_POWER:
                     {
@@ -577,7 +559,7 @@ public:
             if (Player* target = SelectTargetFromPlayerList(150))
                 me->GetMotionMaster()->MoveFollow(target, 0.0f, 0.0f);
             else
-                me->DespawnOrUnsummon(1);
+                me->DespawnOrUnsummon(1ms);
         }
 
         void MovementInform(uint32 type, uint32  /*id*/) override
@@ -586,7 +568,7 @@ public:
             {
                 _boomed = true;
                 me->CastSpell(me, SPELL_LIGHTNING_BLAST, true);
-                me->DespawnOrUnsummon(1000);
+                me->DespawnOrUnsummon(1s);
             }
         }
     };
@@ -704,7 +686,7 @@ public:
 
         void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() != TYPEID_PLAYER || urand(0, 2))
+            if (!who->IsPlayer() || urand(0, 2))
                 return;
 
             Talk(SAY_BRUNDIR_SLAY);
@@ -718,7 +700,7 @@ public:
 
         void SpellHitTarget(Unit*  /*target*/, SpellInfo const* spellInfo) override
         {
-            if (spellInfo->Id == SPELL_CHAIN_LIGHTNING || spellInfo->Id == uint32(RAID_MODE(61916, 63482))) // Lightning Whirl triggered
+            if (spellInfo->Id == sSpellMgr->GetSpellIdForDifficulty(SPELL_CHAIN_LIGHTNING, me)  || spellInfo->Id == sSpellMgr->GetSpellIdForDifficulty(SPELL_LIGHTNING_WHIRL_TRIGG, me))
                 _stunnedAchievement = false;
         }
 
@@ -795,7 +777,7 @@ public:
                         me->SetUnitFlag(UNIT_FLAG_STUNNED);
 
                         me->CastSpell(me, SPELL_LIGHTNING_TENDRILS, true);
-                        me->CastSpell(me, 61883, true);
+                        me->CastSpell(me, SPELL_LIGHTNING_TENDRILS_2, true);
                         events.ScheduleEvent(EVENT_LIGHTNING_LAND, 16s);
                         events.ScheduleEvent(EVENT_LIGHTNING_FLIGHT, 1s);
                         break;
@@ -803,7 +785,7 @@ public:
                 case EVENT_LIGHTNING_LAND:
                     {
                         float speed = me->GetDistance(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()) / (1000.0f * 0.001f);
-                        me->MonsterMoveWithSpeed(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), speed);
+                        me->GetMotionMaster()->MovePoint(0, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), FORCED_MOVEMENT_NONE, speed);
                         events.ScheduleEvent(EVENT_LAND_LAND, 1s);
                         break;
                     }
@@ -819,8 +801,8 @@ public:
 
                     me->SetRegeneratingHealth(true);
                     _flyTargetGUID.Clear();
-                    me->RemoveAura(SPELL_LIGHTNING_TENDRILS);
-                    me->RemoveAura(61883);
+                    me->RemoveAura(sSpellMgr->GetSpellIdForDifficulty(SPELL_LIGHTNING_TENDRILS, me));
+                    me->RemoveAura(SPELL_LIGHTNING_TENDRILS_2);
                     DoResetThreatList();
                     events.CancelEvent(EVENT_LIGHTNING_FLIGHT);
                     break;
@@ -842,94 +824,71 @@ public:
     };
 };
 
-class spell_shield_of_runes : public SpellScriptLoader
+class spell_shield_of_runes_aura : public AuraScript
 {
-public:
-    spell_shield_of_runes() : SpellScriptLoader("spell_shield_of_runes") { }
+    PrepareAuraScript(spell_shield_of_runes_aura);
 
-    class spell_shield_of_runes_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_shield_of_runes_AuraScript);
+        return ValidateSpellInfo({ SPELL_SHIELD_OF_RUNES_BUFF });
+    }
 
-        void OnRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
-        {
-            if (Unit* owner = GetUnitOwner())
-                if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_ENEMY_SPELL && aurEff->GetAmount() <= 0)
-                    owner->CastSpell(owner, SPELL_SHIELD_OF_RUNES_BUFF, false);
-        }
-
-        void Register() override
-        {
-            AfterEffectRemove += AuraEffectRemoveFn(spell_shield_of_runes_AuraScript::OnRemove, EFFECT_0, SPELL_AURA_SCHOOL_ABSORB, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void OnRemove(AuraEffect const* aurEff, AuraEffectHandleModes /*mode*/)
     {
-        return new spell_shield_of_runes_AuraScript();
+        if (Unit* owner = GetUnitOwner())
+            if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_ENEMY_SPELL && aurEff->GetAmount() <= 0)
+                owner->CastSpell(owner, SPELL_SHIELD_OF_RUNES_BUFF, false);
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_shield_of_runes_aura::OnRemove, EFFECT_0, SPELL_AURA_SCHOOL_ABSORB, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
-class spell_assembly_meltdown : public SpellScriptLoader
+class spell_assembly_meltdown : public SpellScript
 {
-public:
-    spell_assembly_meltdown() : SpellScriptLoader("spell_assembly_meltdown") { }
+    PrepareSpellScript(spell_assembly_meltdown);
 
-    class spell_assembly_meltdown_SpellScript : public SpellScript
+    void HandleInstaKill(SpellEffIndex /*effIndex*/)
     {
-        PrepareSpellScript(spell_assembly_meltdown_SpellScript);
+        if (InstanceScript* instance = GetCaster()->GetInstanceScript())
+            if (Creature* Steelbreaker = ObjectAccessor::GetCreature(*GetCaster(), instance->GetGuidData(DATA_STEELBREAKER)))
+                Steelbreaker->AI()->DoAction(ACTION_ADD_CHARGE);
+    }
 
-        void HandleInstaKill(SpellEffIndex /*effIndex*/)
-        {
-            if (InstanceScript* instance = GetCaster()->GetInstanceScript())
-                if (Creature* Steelbreaker = ObjectAccessor::GetCreature(*GetCaster(), instance->GetGuidData(DATA_STEELBREAKER)))
-                    Steelbreaker->AI()->DoAction(ACTION_ADD_CHARGE);
-        }
-
-        void Register() override
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_assembly_meltdown_SpellScript::HandleInstaKill, EFFECT_1, SPELL_EFFECT_INSTAKILL);
-        }
-    };
-
-    SpellScript* GetSpellScript() const override
+    void Register() override
     {
-        return new spell_assembly_meltdown_SpellScript();
+        OnEffectHitTarget += SpellEffectFn(spell_assembly_meltdown::HandleInstaKill, EFFECT_1, SPELL_EFFECT_INSTAKILL);
     }
 };
 
-class spell_assembly_rune_of_summoning : public SpellScriptLoader
+class spell_assembly_rune_of_summoning_aura : public AuraScript
 {
-public:
-    spell_assembly_rune_of_summoning() : SpellScriptLoader("spell_assembly_rune_of_summoning") { }
+    PrepareAuraScript(spell_assembly_rune_of_summoning_aura);
 
-    class spell_assembly_rune_of_summoning_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_assembly_rune_of_summoning_AuraScript);
+        return ValidateSpellInfo({ SPELL_RUNE_OF_SUMMONING_SUMMON });
+    }
 
-        void OnPeriodic(AuraEffect const* aurEff)
-        {
-            PreventDefaultAction();
-            if (aurEff->GetTickNumber() % 2 == 0)
-                GetTarget()->CastSpell(GetTarget(), SPELL_RUNE_OF_SUMMONING_SUMMON, true, nullptr, aurEff, GetTarget()->IsSummon() ? GetTarget()->ToTempSummon()->GetSummonerGUID() : ObjectGuid::Empty);
-        }
-
-        void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (TempSummon* summ = GetTarget()->ToTempSummon())
-                summ->DespawnOrUnsummon(1);
-        }
-
-        void Register() override
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_assembly_rune_of_summoning_AuraScript::OnPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-            OnEffectRemove += AuraEffectRemoveFn(spell_assembly_rune_of_summoning_AuraScript::OnRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void OnPeriodic(AuraEffect const* aurEff)
     {
-        return new spell_assembly_rune_of_summoning_AuraScript();
+        PreventDefaultAction();
+        if (aurEff->GetTickNumber() % 2 == 0)
+            GetTarget()->CastSpell(GetTarget(), SPELL_RUNE_OF_SUMMONING_SUMMON, true, nullptr, aurEff, GetTarget()->IsSummon() ? GetTarget()->ToTempSummon()->GetSummonerGUID() : ObjectGuid::Empty);
+    }
+
+    void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (TempSummon* summ = GetTarget()->ToTempSummon())
+            summ->DespawnOrUnsummon(1ms);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_assembly_rune_of_summoning_aura::OnPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
+        OnEffectRemove += AuraEffectRemoveFn(spell_assembly_rune_of_summoning_aura::OnRemove, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -976,9 +935,9 @@ void AddSC_boss_assembly_of_iron()
     new boss_stormcaller_brundir();
     new npc_assembly_lightning();
 
-    new spell_shield_of_runes();
-    new spell_assembly_meltdown();
-    new spell_assembly_rune_of_summoning();
+    RegisterSpellScript(spell_shield_of_runes_aura);
+    RegisterSpellScript(spell_assembly_meltdown);
+    RegisterSpellScript(spell_assembly_rune_of_summoning_aura);
 
     new achievement_assembly_of_iron("achievement_but_im_on_your_side", 0);
     new achievement_assembly_of_iron("achievement_assembly_steelbreaker", NPC_STEELBREAKER);

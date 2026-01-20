@@ -1,64 +1,51 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "AchievementCriteriaScript.h"
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "ulduar.h"
 
 enum AuriayaSpells
 {
     // BASIC
     SPELL_TERRIFYING_SCREECH            = 64386,
-    SPELL_SENTINEL_BLAST_10             = 64389,
-    SPELL_SENTINEL_BLAST_25             = 64678,
-    SPELL_SONIC_SCREECH_10              = 64422,
-    SPELL_SONIC_SCREECH_25              = 64688,
+    SPELL_SENTINEL_BLAST                = 64389,
+    SPELL_SONIC_SCREECH                 = 64422,
     SPELL_GUARDIAN_SWARM                = 64396,
     SPELL_ENRAGE                        = 47008,
     SPELL_ACTIVATE_FERAL_DEFENDER       = 64449,
 
     // Sanctum Sentry
-    SPELL_SAVAGE_POUNCE_10              = 64666,
-    SPELL_SAVAGE_POUNCE_25              = 64374,
-    SPELL_RIP_FLESH_10                  = 64375,
-    SPELL_RIP_FLESH_25                  = 64667,
+    SPELL_SAVAGE_POUNCE                 = 64666,
+    SPELL_RIP_FLESH                     = 64375,
     SPELL_STRENGTH_OF_THE_PACK          = 64369,
 
     // Feral Defender
     SPELL_FERAL_ESSENCE                 = 64455,
-    SPELL_FERAL_POUNCE_10               = 64478,
-    SPELL_FERAL_POUNCE_25               = 64669,
-    SPELL_FERAL_RUSH_10                 = 64496,
-    SPELL_FERAL_RUSH_25                 = 64674,
+    SPELL_FERAL_POUNCE                  = 64478,
+    SPELL_FERAL_RUSH                    = 64496,
     //SPELL_SEEPING_FERAL_ESSENCE_SUMMON    = 64457,
-    SPELL_SEEPING_FERAL_ESSENCE_10      = 64458,
-    SPELL_SEEPING_FERAL_ESSENCE_25      = 64676,
+    SPELL_SEEPING_FERAL_ESSENCE         = 64458,
 };
-
-#define SPELL_SONIC_SCREECH             RAID_MODE(SPELL_SONIC_SCREECH_10, SPELL_SONIC_SCREECH_25)
-#define SPELL_SENTINEL_BLAST            RAID_MODE(SPELL_SENTINEL_BLAST_10, SPELL_SENTINEL_BLAST_25)
-#define SPELL_SAVAGE_POUNCE             RAID_MODE(SPELL_SAVAGE_POUNCE_10, SPELL_SAVAGE_POUNCE_25)
-#define SPELL_RIP_FLESH                 RAID_MODE(SPELL_RIP_FLESH_10, SPELL_RIP_FLESH_25)
-#define SPELL_FERAL_POUNCE              RAID_MODE(SPELL_FERAL_POUNCE_10, SPELL_FERAL_POUNCE_25)
-#define SPELL_FERAL_RUSH                RAID_MODE(SPELL_FERAL_RUSH_10, SPELL_FERAL_RUSH_25)
-//#define SPELL_SEEPING_FERAL_ESSENCE     RAID_MODE(SPELL_SEEPING_FERAL_ESSENCE_10, SPELL_SEEPING_FERAL_ESSENCE_25)
 
 enum AuriayaNPC
 {
@@ -192,7 +179,7 @@ public:
 
         void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_PLAYER || urand(0, 2))
+            if (!victim->IsPlayer() || urand(0, 2))
                 return;
 
             Talk(SAY_SLAY);
@@ -253,7 +240,7 @@ public:
                 case EVENT_SENTINEL_BLAST:
                     me->CastSpell(me, SPELL_SENTINEL_BLAST, false);
                     events.Repeat(35s);
-                    events.DelayEvents(5000, 0);
+                    events.DelayEvents(5s, 0);
                     break;
                 case EVENT_RESPAWN_FERAL_DEFENDER:
                     {
@@ -384,14 +371,14 @@ public:
         {
             if (param == ACTION_FERAL_RESPAWN)
             {
-                me->setDeathState(JUST_RESPAWNED);
+                me->setDeathState(DeathState::JustRespawned);
 
                 if (Player* target = SelectTargetFromPlayerList(200))
                     AttackStart(target);
                 else
                 {
                     summons.DespawnAll();
-                    me->DespawnOrUnsummon(1);
+                    me->DespawnOrUnsummon(1ms);
                 }
 
                 if (_feralEssenceStack)
@@ -430,29 +417,18 @@ public:
     };
 };
 
-class spell_auriaya_sentinel_blast : public SpellScriptLoader
+class spell_auriaya_sentinel_blast : public SpellScript
 {
-public:
-    spell_auriaya_sentinel_blast() : SpellScriptLoader("spell_auriaya_sentinel_blast") { }
+    PrepareSpellScript(spell_auriaya_sentinel_blast);
 
-    class spell_auriaya_sentinel_blast_SpellScript : public SpellScript
+    void FilterTargets(std::list<WorldObject*>& unitList)
     {
-        PrepareSpellScript(spell_auriaya_sentinel_blast_SpellScript);
+        unitList.remove_if(PlayerOrPetCheck());
+    }
 
-        void FilterTargets(std::list<WorldObject*>& unitList)
-        {
-            unitList.remove_if(PlayerOrPetCheck());
-        }
-
-        void Register() override
-        {
-            OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_auriaya_sentinel_blast_SpellScript::FilterTargets, EFFECT_ALL, TARGET_UNIT_SRC_AREA_ENEMY);
-        }
-    };
-
-    SpellScript* GetSpellScript() const override
+    void Register() override
     {
-        return new spell_auriaya_sentinel_blast_SpellScript();
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_auriaya_sentinel_blast::FilterTargets, EFFECT_ALL, TARGET_UNIT_SRC_AREA_ENEMY);
     }
 };
 
@@ -494,7 +470,7 @@ void AddSC_boss_auriaya()
     new npc_auriaya_sanctum_sentry();
     new npc_auriaya_feral_defender();
 
-    new spell_auriaya_sentinel_blast();
+    RegisterSpellScript(spell_auriaya_sentinel_blast);
 
     new achievement_auriaya_crazy_cat_lady();
     new achievement_auriaya_nine_lives();

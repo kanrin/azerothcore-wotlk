@@ -1,32 +1,24 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-Name: titles_commandscript
-%Complete: 100
-Comment: All titles related commands
-Category: commandscripts
-EndScriptData */
-
 #include "Chat.h"
+#include "CommandScript.h"
 #include "DBCStores.h"
-#include "Language.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 
 using namespace Acore::ChatCommands;
 
@@ -60,8 +52,7 @@ public:
         Player* target = handler->getSelectedPlayer();
         if (!target)
         {
-            handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_NO_CHAR_SELECTED);
             return false;
         }
 
@@ -72,8 +63,7 @@ public:
         CharTitlesEntry const* titleInfo = sCharTitlesStore.LookupEntry(titleId);
         if (!titleInfo)
         {
-            handler->PSendSysMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
             return false;
         }
 
@@ -93,8 +83,7 @@ public:
         Player* target = handler->getSelectedPlayer();
         if (!target)
         {
-            handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_NO_CHAR_SELECTED);
             return false;
         }
 
@@ -105,8 +94,7 @@ public:
         CharTitlesEntry const* titleInfo = sCharTitlesStore.LookupEntry(titleId);
         if (!titleInfo)
         {
-            handler->PSendSysMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
             return false;
         }
 
@@ -124,8 +112,7 @@ public:
         Player* target = handler->getSelectedPlayer();
         if (!target)
         {
-            handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_NO_CHAR_SELECTED);
             return false;
         }
 
@@ -136,8 +123,7 @@ public:
         CharTitlesEntry const* titleInfo = sCharTitlesStore.LookupEntry(titleId);
         if (!titleInfo)
         {
-            handler->PSendSysMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_INVALID_TITLE_ID, uint32(titleId));
             return false;
         }
 
@@ -163,8 +149,7 @@ public:
         Player* target = handler->getSelectedPlayer();
         if (!target)
         {
-            handler->SendSysMessage(LANG_NO_CHAR_SELECTED);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_NO_CHAR_SELECTED);
             return false;
         }
 

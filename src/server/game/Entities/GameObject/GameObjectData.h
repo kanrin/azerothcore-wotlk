@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,11 +18,10 @@
 #ifndef GAMEOBJECTDATA_H
 #define GAMEOBJECTDATA_H
 
-#include "Common.h"
 #include "SharedDefines.h"
-#include "WorldPacket.h"
-#include <string>
+#include <array>
 #include <vector>
+#include <string>
 
 #define MAX_GAMEOBJECT_QUEST_ITEMS 6
 #define MAX_GO_STATE               3
@@ -629,6 +628,8 @@ struct GameObjectTemplate
         case GAMEOBJECT_TYPE_DUNGEON_DIFFICULTY:
             return true;
         case GAMEOBJECT_TYPE_TRAPDOOR:
+            return true;
+        case GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING:
             return true;
         default:
             return false;

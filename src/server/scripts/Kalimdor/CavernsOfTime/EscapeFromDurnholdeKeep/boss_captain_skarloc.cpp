@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "old_hillsbrad.h"
 
@@ -61,11 +61,13 @@ struct boss_captain_skarloc : public BossAI
     }
 
     SummonList summons;
+    bool _spawnedAdds;
 
     void Reset() override
     {
         _Reset();
         summons.DespawnAll();
+        _spawnedAdds = false;
     }
 
     void JustSummoned(Creature* summon) override
@@ -108,27 +110,31 @@ struct boss_captain_skarloc : public BossAI
         if (type != ESCORT_MOTION_TYPE)
             return;
 
-        // Xinef: we can rely here on internal counting
-        if (id == 1)
+        if (!_spawnedAdds)
         {
-            me->SummonCreature(NPC_DURNHOLDE_MAGE, 2038.549f, 273.303f, 63.420f, 5.30f, TEMPSUMMON_MANUAL_DESPAWN);
-            me->SummonCreature(NPC_DURNHOLDE_VETERAN, 2032.810f, 269.416f, 63.561f, 5.30f, TEMPSUMMON_MANUAL_DESPAWN);
-        }
-        else if (id == 2)
-        {
-            me->Dismount();
-            me->SetWalk(true);
-            for (SummonList::const_iterator itr = summons.begin(); itr != summons.end(); ++itr)
+            if (id == 1)
             {
-                if (Creature* summon = ObjectAccessor::GetCreature(*me, *itr))
-                {
-                    summon->SetWalk(true);
-                }
+                me->SummonCreature(NPC_DURNHOLDE_WARDEN, 2038.549f, 273.303f, 63.420f, 5.30f, TEMPSUMMON_MANUAL_DESPAWN);
+                me->SummonCreature(NPC_DURNHOLDE_VETERAN, 2032.810f, 269.416f, 63.561f, 5.30f, TEMPSUMMON_MANUAL_DESPAWN);
             }
-            if (Creature* mount = me->SummonCreature(NPC_SKARLOC_MOUNT, 2049.12f, 252.31f, 62.855f, me->GetOrientation(), TEMPSUMMON_MANUAL_DESPAWN))
+            else if (id == 2)
             {
-                mount->SetImmuneToNPC(true);
-                mount->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                me->Dismount();
+                me->SetWalk(true);
+                summons.DoForAllSummons([&](WorldObject* summon)
+                {
+                    if (summon)
+                    {
+                        summon->ToCreature()->SetWalk(true);
+                    }
+                });
+                if (Creature* mount = me->SummonCreature(NPC_SKARLOC_MOUNT, 2049.12f, 252.31f, 62.855f, me->GetOrientation(), TEMPSUMMON_MANUAL_DESPAWN))
+                {
+                    mount->SetImmuneToNPC(true);
+                    mount->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                }
+
+                _spawnedAdds = true;
             }
         }
 
@@ -140,17 +146,17 @@ struct boss_captain_skarloc : public BossAI
             {
                 me->SetImmuneToAll(false);
                 me->SetInCombatWithZone();
-                for (SummonList::const_iterator itr = summons.begin(); itr != summons.end(); ++itr)
+                summons.DoForAllSummons([&](WorldObject* summon)
                 {
-                    if (Creature* summon = ObjectAccessor::GetCreature(*me, *itr))
+                    if (Creature* adds = summon->ToCreature())
                     {
-                        if (summon->GetEntry() != NPC_SKARLOC_MOUNT)
+                        if (adds->GetEntry() != NPC_SKARLOC_MOUNT)
                         {
-                            summon->SetImmuneToAll(false);
-                            summon->SetInCombatWithZone();
+                            adds->SetImmuneToAll(false);
+                            adds->SetInCombatWithZone();
                         }
                     }
-                }
+                });
             }, 8s);
         }
     }

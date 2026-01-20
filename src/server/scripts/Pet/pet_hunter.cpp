@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -20,7 +20,8 @@
  * Scriptnames of files in this file should be prefixed with "npc_pet_hun_".
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "PetDefines.h"
 #include "ScriptedCreature.h"
 
 enum HunterSpells
@@ -57,7 +58,7 @@ struct npc_pet_hunter_snake_trap : public ScriptedAI
         me->LoadCreaturesAddon(true);
         me->SetLootRecipient(nullptr);
         me->ResetPlayerDamageReq();
-        me->SetLastDamagedTime(0);
+        me->ClearLastLeashExtensionTimePtr();
 
         me->AddUnitState(UNIT_STATE_EVADE);
         me->GetMotionMaster()->MoveTargetedHome();
@@ -98,7 +99,7 @@ struct npc_pet_hunter_snake_trap : public ScriptedAI
 
             uint32 health = uint32(107 * (me->GetLevel() - 40) * 0.025f);
             me->SetCreateHealth(health);
-            me->SetModifierValue(UNIT_MOD_HEALTH, BASE_VALUE, (float)health);
+            me->SetStatFlatModifier(UNIT_MOD_HEALTH, BASE_VALUE, (float)health);
             me->SetMaxHealth(health);
 
             //Add delta to make them not all hit the same time

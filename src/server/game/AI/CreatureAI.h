@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -19,16 +19,17 @@
 #define ACORE_CREATUREAI_H
 
 #include "AreaBoundary.h"
-#include "Common.h"
 #include "Creature.h"
-#include "UnitAI.h"
 #include "EventMap.h"
+#include "TaskScheduler.h"
+#include "UnitAI.h"
 
 class WorldObject;
 class Unit;
 class Creature;
 class Player;
 class SpellInfo;
+enum SpellFinishReason : uint8;
 
 typedef std::vector<AreaBoundary const*> CreatureBoundary;
 
@@ -72,6 +73,7 @@ protected:
     Creature* const me;
 
     EventMap events;
+    TaskScheduler scheduler;
 
     bool UpdateVictim();
     bool UpdateVictimWithGaze();
@@ -92,8 +94,10 @@ public:
         EVADE_REASON_OTHER
     };
 
-    void Talk(uint8 id, WorldObject const* whisperTarget = nullptr, Milliseconds delay = 0s);
+    void Talk(uint8 id, WorldObject const* whisperTarget = nullptr, Milliseconds delay = 0ms);
     void Talk(uint8 id, Milliseconds delay) { Talk(id, nullptr, delay); }
+
+    WorldObject* GetSummoner() const;
 
     explicit CreatureAI(Creature* creature) : UnitAI(creature), me(creature), _boundary(nullptr), _negateBoundary(false), m_MoveInLineOfSight_locked(false) { }
 
@@ -135,11 +139,16 @@ public:
     virtual void SummonedCreatureDies(Creature* /*summon*/, Unit* /*killer*/) {}
     virtual void SummonedCreatureDespawnAll() {}
 
+    virtual void SummonedCreatureEvade(Creature* /*summon*/) {}
+
     // Called when hit by a spell
     virtual void SpellHit(Unit* /*caster*/, SpellInfo const* /*spell*/) {}
 
     // Called when spell hits a target
     virtual void SpellHitTarget(Unit* /*target*/, SpellInfo const* /*spell*/) {}
+
+    // Called when a spell either finishes, interrupts or cancels a spell cast
+    virtual void OnSpellCastFinished(SpellInfo const* /*spell*/, SpellFinishReason /*reason*/) {}
 
     // Called when the creature is target of hostile action: swing, hostile spell landed, fear/etc)
     virtual void AttackedBy(Unit* /*attacker*/) {}
@@ -204,6 +213,9 @@ public:
 
     virtual void PetStopAttack() { }
 
+    // intended for encounter design/debugging. do not use for other purposes. expensive.
+    int32 VisualizeBoundary(uint32 duration, Unit* owner = nullptr, bool fill = false, bool checkZ = false) const;
+
     // boundary system methods
     virtual bool CheckInRoom();
     CreatureBoundary const* GetBoundary() const { return _boundary; }
@@ -215,6 +227,12 @@ public:
     virtual void CalculateThreat(Unit* /*hatedUnit*/, float& /*threat*/, SpellInfo const* /*threatSpell*/) { }
 
     virtual bool OnTeleportUnreacheablePlayer(Player* /*player*/) { return false; }
+
+    // Called when an aura is removed or expires.
+    virtual void OnAuraRemove(AuraApplication* /*aurApp*/, AuraRemoveMode /*mode*/) { }
+
+    virtual void DistancingStarted() {}
+    virtual void DistancingEnded() {}
 
 protected:
     virtual void MoveInLineOfSight(Unit* /*who*/);

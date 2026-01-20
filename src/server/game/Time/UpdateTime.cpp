@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -19,6 +19,9 @@
 #include "Config.h"
 #include "Log.h"
 #include "Timer.h"
+#include <algorithm>
+#include <cmath>
+#include <iterator>
 
 // create instance
 WorldUpdateTime sWorldUpdateTime;
@@ -71,8 +74,34 @@ uint32 UpdateTime::GetLastUpdateTime() const
     return _updateTimeDataTable[_updateTimeTableIndex != 0 ? _updateTimeTableIndex - 1 : _updateTimeDataTable.size() - 1];
 }
 
+uint32 UpdateTime::GetDatasetSize() const
+{
+    return _updateTimeDataTable[_updateTimeDataTable.size() - 1] == 0 ? _updateTimeTableIndex : _orderedUpdateTimeDataTable.size();
+}
+
+uint32 UpdateTime::GetPercentile(uint8 p)
+{
+    if (_needsReorder)
+        SortUpdateTimeDataTable();
+
+    // Calculate the index of the element corresponding to the percentile
+    double index = (double(p) / 100.0) * (GetDatasetSize() - 1);
+
+    // If the index is an integer, return the value at that index
+    if (index == std::floor(index))
+       return _orderedUpdateTimeDataTable[index];
+
+    // Otherwise, perform linear interpolation
+    int lowerIndex = std::floor(index);
+    int upperIndex = std::ceil(index);
+    double fraction = index - lowerIndex;
+
+    return _orderedUpdateTimeDataTable[lowerIndex] * (1 - fraction) + _orderedUpdateTimeDataTable[upperIndex] * fraction;
+}
+
 void UpdateTime::UpdateWithDiff(uint32 diff)
 {
+    _needsReorder = true;
     _totalUpdateTime = _totalUpdateTime - _updateTimeDataTable[_updateTimeTableIndex] + diff;
     _updateTimeDataTable[_updateTimeTableIndex] = diff;
 
@@ -100,9 +129,29 @@ void UpdateTime::RecordUpdateTimeReset()
     _recordedTime = GetTimeMS();
 }
 
+void UpdateTime::SortUpdateTimeDataTable()
+{
+    if (!_needsReorder)
+        return;
+
+    auto endUpdateTable = _updateTimeDataTable.end();
+    if (!_updateTimeDataTable[_updateTimeDataTable.size() - 1])
+        endUpdateTable = std::next(_updateTimeDataTable.begin(), _updateTimeTableIndex);
+
+    std::copy(_updateTimeDataTable.begin(), endUpdateTable, _orderedUpdateTimeDataTable.begin());
+
+    auto endOrderedUpdateTable = _orderedUpdateTimeDataTable.end();
+    if (!_updateTimeDataTable[_updateTimeDataTable.size() - 1])
+        endOrderedUpdateTable = std::next(_orderedUpdateTimeDataTable.begin(), _updateTimeTableIndex);
+
+    std::sort(_orderedUpdateTimeDataTable.begin(), endOrderedUpdateTable);
+
+    _needsReorder = false;
+}
+
 void WorldUpdateTime::LoadFromConfig()
 {
-    _recordUpdateTimeInverval = Milliseconds(sConfigMgr->GetOption<uint32>("RecordUpdateTimeDiffInterval", 60000));
+    _recordUpdateTimeInverval = Milliseconds(sConfigMgr->GetOption<uint32>("RecordUpdateTimeDiffInterval", 300000));
     _recordUpdateTimeMin = Milliseconds(sConfigMgr->GetOption<uint32>("MinRecordUpdateTimeDiff", 100));
 }
 
@@ -113,11 +162,15 @@ void WorldUpdateTime::SetRecordUpdateTimeInterval(Milliseconds t)
 
 void WorldUpdateTime::RecordUpdateTime(Milliseconds gameTimeMs, uint32 diff, uint32 sessionCount)
 {
-    if (_recordUpdateTimeInverval > 0s && diff > _recordUpdateTimeMin.count())
+    if (_recordUpdateTimeInverval > 0ms && diff > _recordUpdateTimeMin.count())
     {
         if (GetMSTimeDiff(_lastRecordTime, gameTimeMs) > _recordUpdateTimeInverval)
         {
-            LOG_INFO("time.update", "Update time diff: {}. Players online: {}.", GetAverageUpdateTime(), sessionCount);
+            LOG_INFO("time.update", "Update time diff: {}ms with {} players online", GetLastUpdateTime(), sessionCount);
+            LOG_INFO("time.update", "Last {} diffs summary:", GetDatasetSize());
+            LOG_INFO("time.update", "|- Mean: {}ms", GetAverageUpdateTime());
+            LOG_INFO("time.update", "|- Median: {}ms", GetPercentile(50));
+            LOG_INFO("time.update", "|- Percentiles (95, 99, max): {}ms, {}ms, {}ms", GetPercentile(95), GetPercentile(99), GetPercentile(100));
             _lastRecordTime = gameTimeMs;
         }
     }

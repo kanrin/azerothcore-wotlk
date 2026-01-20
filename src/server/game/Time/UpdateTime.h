@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -21,7 +21,6 @@
 #include "Define.h"
 #include "Duration.h"
 #include <array>
-#include <string>
 
 constexpr auto AVG_DIFF_COUNT = 500;
 
@@ -35,6 +34,8 @@ public:
     uint32 GetMaxUpdateTime() const;
     uint32 GetMaxUpdateTimeOfCurrentTable() const;
     uint32 GetLastUpdateTime() const;
+    uint32 GetDatasetSize() const;
+    uint32 GetPercentile(uint8 p);
 
     void UpdateWithDiff(uint32 diff);
 
@@ -42,6 +43,8 @@ public:
 
 protected:
     UpdateTime();
+
+    void SortUpdateTimeDataTable();
 
 private:
     DiffTableArray _updateTimeDataTable;
@@ -51,6 +54,9 @@ private:
     uint32 _maxUpdateTime;
     uint32 _maxUpdateTimeOfLastTable;
     uint32 _maxUpdateTimeOfCurrentTable;
+
+    DiffTableArray _orderedUpdateTimeDataTable;
+    bool _needsReorder;
 
     Milliseconds _recordedTime;
 };

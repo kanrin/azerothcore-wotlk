@@ -1,43 +1,39 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "violet_hold.h"
 
 enum eSpells
 {
-    SPELL_RAY_OF_SUFFERING_N                = 54442,
-    SPELL_RAY_OF_SUFFERING_H                = 59524,
+    SPELL_RAY_OF_SUFFERING                  = 54442,
     //SPELL_RAY_OF_SUFFERING_TRIGGERED      = 54417,
 
-    SPELL_RAY_OF_PAIN_N                     = 54438,
-    SPELL_RAY_OF_PAIN_H                     = 59523,
+    SPELL_RAY_OF_PAIN                       = 54438,
     //SPELL_RAY_OF_PAIN_TRIGGERED_N         = 54416,
     //SPELL_RAY_OF_PAIN_TRIGGERED_H         = 59525,
 
     SPELL_CORROSIVE_SALIVA                  = 54527,
     SPELL_OPTIC_LINK                        = 54396,
 };
-
-#define SPELL_RAY_OF_SUFFERING              DUNGEON_MODE(SPELL_RAY_OF_SUFFERING_N, SPELL_RAY_OF_SUFFERING_H)
-#define SPELL_RAY_OF_PAIN                   DUNGEON_MODE(SPELL_RAY_OF_PAIN_N, SPELL_RAY_OF_PAIN_H)
 
 enum eEvents
 {
@@ -90,7 +86,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -131,37 +127,26 @@ public:
     };
 };
 
-class spell_optic_link : public SpellScriptLoader
+class spell_optic_link_aura : public AuraScript
 {
-public:
-    spell_optic_link() : SpellScriptLoader("spell_optic_link") { }
+    PrepareAuraScript(spell_optic_link_aura);
 
-    class spell_optic_linkAuraScript : public AuraScript
+    void HandleEffectPeriodic(AuraEffect const* aurEff)
     {
-        PrepareAuraScript(spell_optic_linkAuraScript)
+        if (Unit* target = GetTarget())
+            if (Unit* caster = GetCaster())
+                if (GetAura() && GetAura()->GetEffect(0))
+                    GetAura()->GetEffect(0)->SetAmount(aurEff->GetSpellInfo()->Effects[EFFECT_0].BasePoints + (((int32)target->GetExactDist(caster)) * 25) + (aurEff->GetTickNumber() * 100));
+    }
 
-        void HandleEffectPeriodic(AuraEffect const* aurEff)
-        {
-            if (Unit* target = GetTarget())
-                if (Unit* caster = GetCaster())
-                    if (GetAura() && GetAura()->GetEffect(0))
-                        GetAura()->GetEffect(0)->SetAmount(aurEff->GetSpellInfo()->Effects[EFFECT_0].BasePoints + (((int32)target->GetExactDist(caster)) * 25) + (aurEff->GetTickNumber() * 100));
-        }
-
-        void Register() override
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_optic_linkAuraScript::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void Register() override
     {
-        return new spell_optic_linkAuraScript();
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_optic_link_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE);
     }
 };
 
 void AddSC_boss_moragg()
 {
     new boss_moragg();
-    new spell_optic_link();
+    RegisterSpellScript(spell_optic_link_aura);
 }

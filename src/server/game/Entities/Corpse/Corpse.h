@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -54,7 +54,7 @@ public:
     void AddToWorld() override;
     void RemoveFromWorld() override;
 
-    void BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* target) const override;
+    void BuildValuesUpdate(uint8 updateType, ByteBuffer* data, Player* target) override;
 
     bool Create(ObjectGuid::LowType guidlow);
     bool Create(ObjectGuid::LowType guidlow, Player* owner);
@@ -63,7 +63,7 @@ public:
     bool LoadCorpseFromDB(ObjectGuid::LowType guid, Field* fields);
 
     void DeleteFromDB(CharacterDatabaseTransaction trans);
-    static void DeleteFromDB(ObjectGuid const ownerGuid, CharacterDatabaseTransaction trans);
+    static void DeleteFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransaction trans);
 
     [[nodiscard]] ObjectGuid GetOwnerGUID() const { return GetGuidValue(CORPSE_FIELD_OWNER); }
 

@@ -1,34 +1,34 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * Ordered alphabetically using scriptname.
- * Scriptnames of files in this file should be prefixed with "npc_pet_gen_".
- */
-
+#include "CreatureScript.h"
 #include "CreatureTextMgr.h"
 #include "Group.h"
 #include "PassiveAI.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
+/*
+ * Ordered alphabetically using scriptname.
+ * Scriptnames of files in this file should be prefixed with "npc_pet_gen_".
+ */
 
 enum soulTrader
 {
@@ -49,7 +49,7 @@ struct npc_pet_gen_soul_trader_beacon : public ScriptedAI
     npc_pet_gen_soul_trader_beacon(Creature* c) : ScriptedAI(c)
     {
         events.Reset();
-        events.ScheduleEvent(EVENT_INITIAL_TALK, 0);
+        events.ScheduleEvent(EVENT_INITIAL_TALK, 0ms);
         if (me->ToTempSummon())
             if (Unit* owner = me->ToTempSummon()->GetOwner())
             {
@@ -65,7 +65,7 @@ struct npc_pet_gen_soul_trader_beacon : public ScriptedAI
         if (spellInfo->Id == SPELL_STEAL_ESSENCE_VISUAL && target == me)
         {
             Talk(1);
-            events.ScheduleEvent(EVENT_ADD_TOKEN, 3000);
+            events.ScheduleEvent(EVENT_ADD_TOKEN, 3s);
             me->CastSpell(me, SPELL_EMOTE_STATE_SWIM_RUN, true);
         }
     }
@@ -160,7 +160,7 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
         if (Unit* owner = me->GetCharmerOrOwner())
         {
             me->GetMotionMaster()->Clear(false);
-            me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, me->GetFollowAngle(), MOTION_SLOT_ACTIVE);
+            me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, MINI_PET_FOLLOW_ANGLE, MOTION_SLOT_ACTIVE);
         }
     }
 
@@ -193,7 +193,7 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
                                 duration = cooldown;
                                 aura = SPELL_AURA_POSTMAN_S + i;
                                 _state = argentPonyService[TEAM_ALLIANCE][i];
-                                me->ToTempSummon()->UnSummon(duration);
+                                me->ToTempSummon()->UnSummon(Milliseconds(duration));
                                 break;
                             }
                         }
@@ -204,7 +204,7 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
                                 duration = cooldown * IN_MILLISECONDS;
                                 aura = SPELL_AURA_BANK_G + i;
                                 _state = argentPonyService[TEAM_HORDE][i];
-                                me->ToTempSummon()->UnSummon(duration);
+                                me->ToTempSummon()->UnSummon(Milliseconds(duration));
                                 break;
                             }
                         }
@@ -327,7 +327,7 @@ struct npc_pet_gen_argent_pony_bridle : public ScriptedAI
             creature->CastSpell(creature, spellId, true);
             player->AddSpellCooldown(spellId, 0, 3 * MINUTE * IN_MILLISECONDS);
             player->AddSpellCooldown(player->GetTeamId(true) ? SPELL_AURA_TIRED_G : SPELL_AURA_TIRED_S, 0, 3 * MINUTE * IN_MILLISECONDS + 4 * HOUR * IN_MILLISECONDS);
-            creature->DespawnOrUnsummon(3 * MINUTE * IN_MILLISECONDS);
+            creature->DespawnOrUnsummon(180s);
         }
         return true;
     }
@@ -388,7 +388,7 @@ struct npc_pet_gen_target_following_bomb : public NullCreatureAI
                 if (me->GetDistance(target) < 3.0f)
                 {
                     me->CastSpell(me, bombSpellId, false);
-                    me->DespawnOrUnsummon(500);
+                    me->DespawnOrUnsummon(500ms);
                 }
             }
             else if (!me->HasUnitState(UNIT_STATE_FOLLOW))
@@ -528,7 +528,7 @@ struct npc_pet_gen_imp_in_a_bottle : public NullCreatureAI
 
         if (TempSummon* summon = me->ToTempSummon())
             if (Unit* owner = summon->GetSummonerUnit())
-                if (owner->GetTypeId() == TYPEID_PLAYER)
+                if (owner->IsPlayer())
                 {
                     _ownerGUID = owner->GetGUID();
                     if (owner->ToPlayer()->GetGroup())
@@ -557,7 +557,7 @@ struct npc_pet_gen_imp_in_a_bottle : public NullCreatureAI
         if (_talkTimer >= 5000)
         {
             _talkTimer = 0;
-            me->DespawnOrUnsummon(1);
+            me->DespawnOrUnsummon(1ms);
             if (!_hasParty)
                 Talk(0, ObjectAccessor::GetPlayer(*me, _ownerGUID));
             else if (Player* player = ObjectAccessor::GetPlayer(*me, _ownerGUID))
@@ -567,9 +567,9 @@ struct npc_pet_gen_imp_in_a_bottle : public NullCreatureAI
                     for (GroupReference* itr = player->GetGroup()->GetFirstMember(); itr != nullptr && limit < 4; itr = itr->next(), ++limit)
                         if (Player* groupPlayer = itr->GetSource())
                             if (groupPlayer != player)
-                                groupPlayer->GetSession()->SendPacket(&_data);
+                                groupPlayer->SendDirectMessage(&_data);
 
-                player->GetSession()->SendPacket(&_data);
+                player->SendDirectMessage(&_data);
             }
         }
     }
@@ -597,7 +597,7 @@ struct npc_pet_gen_wind_rider_cub : public NullCreatureAI
             checkTimer2 = 0;
             if (Unit* owner = me->GetOwner())
             {
-                if (owner->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED) || owner->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED))
+                if (owner->HasIncreaseMountedFlightSpeedAura() || owner->HasIncreaseMountedSpeedAura())
                 {
                     isFlying = true;
                     me->SetCanFly(true);
@@ -709,7 +709,7 @@ struct npc_pet_gen_toxic_wasteling : public PassiveAI
                 if (Unit* owner = me->GetCharmerOrOwner())
                 {
                     me->GetMotionMaster()->Clear(false);
-                    me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, me->GetFollowAngle(), MOTION_SLOT_ACTIVE);
+                    me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, MINI_PET_FOLLOW_ANGLE, MOTION_SLOT_ACTIVE);
                 }
                 me->AddAura(71854, me); // Growth
                 checkTimer = 0;
@@ -718,11 +718,15 @@ struct npc_pet_gen_toxic_wasteling : public PassiveAI
     }
 };
 
+enum FetchBall
+{
+    SPELL_PET_TOY_FETCH_BALL_COME_HERE = 48649,
+    SPELL_PET_TOY_FETCH_BALL_HAS_BALL  = 48708
+};
+
 struct npc_pet_gen_fetch_ball : public NullCreatureAI
 {
-    npc_pet_gen_fetch_ball(Creature* c) : NullCreatureAI(c)
-    {
-    }
+    npc_pet_gen_fetch_ball(Creature* c) : NullCreatureAI(c) { }
 
     uint32 checkTimer;
     ObjectGuid targetGUID;
@@ -735,12 +739,12 @@ struct npc_pet_gen_fetch_ball : public NullCreatureAI
         me->SetOwnerGUID(summoner->GetGUID());
         checkTimer = 0;
         targetGUID.Clear();
-        me->CastSpell(me, 48649 /*SPELL_PET_TOY_FETCH_BALL_COME_HERE*/, true);
+        me->CastSpell(me, SPELL_PET_TOY_FETCH_BALL_COME_HERE, true);
     }
 
     void SpellHitTarget(Unit* target, SpellInfo const* spellInfo) override
     {
-        if (spellInfo->Id == 48649 /*SPELL_PET_TOY_FETCH_BALL_COME_HERE*/)
+        if (spellInfo->Id == SPELL_PET_TOY_FETCH_BALL_COME_HERE)
         {
             target->GetMotionMaster()->MovePoint(50, me->GetHomePosition());
             targetGUID = target->GetGUID();
@@ -757,8 +761,8 @@ struct npc_pet_gen_fetch_ball : public NullCreatureAI
                 if (me->GetDistance2d(target) < 2.0f)
                 {
                     target->AI()->EnterEvadeMode();
-                    target->CastSpell(target, 48708 /*SPELL_PET_TOY_FETCH_BALL_HAS_BALL*/, true);
-                    me->DespawnOrUnsummon(1);
+                    target->CastSpell(target, SPELL_PET_TOY_FETCH_BALL_HAS_BALL, true);
+                    me->DespawnOrUnsummon();
                 }
         }
     }
@@ -817,6 +821,16 @@ struct npc_pet_darting_hatchling : public NullCreatureAI
     }
 };
 
+struct npc_pet_proto_drake_whelp : public NullCreatureAI
+{
+    npc_pet_proto_drake_whelp(Creature* c) : NullCreatureAI(c) { }
+
+    void Reset() override
+    {
+        me->SetAnimTier(AnimTier::Fly);
+    }
+};
+
 void AddSC_generic_pet_scripts()
 {
     RegisterCreatureAI(npc_pet_gen_soul_trader_beacon);
@@ -832,4 +846,5 @@ void AddSC_generic_pet_scripts()
     RegisterCreatureAI(npc_pet_gen_fetch_ball);
     RegisterCreatureAI(npc_pet_gen_moth);
     RegisterCreatureAI(npc_pet_darting_hatchling);
+    RegisterCreatureAI(npc_pet_proto_drake_whelp);
 }

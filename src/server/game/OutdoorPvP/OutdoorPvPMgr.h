@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -39,7 +39,7 @@ class OutdoorPvPMgr
 {
 private:
     OutdoorPvPMgr();
-    ~OutdoorPvPMgr() {};
+    ~OutdoorPvPMgr() = default;
 
 public:
     static OutdoorPvPMgr* instance();
@@ -80,24 +80,20 @@ public:
 
     void HandleDropFlag(Player* player, uint32 spellId);
 
-    // pussywizard: lock required because different functions affect m_players
+    // pussywizard: lock required because different functions affect _players
     std::mutex _lock;
 
 private:
-    typedef std::vector<OutdoorPvP*> OutdoorPvPSet;
-    typedef std::map<uint32 /* zoneid */, OutdoorPvP*> OutdoorPvPMap;
-    typedef std::map<OutdoorPvPTypes, OutdoorPvPData*> OutdoorPvPDataMap;
-
     // contains all initiated outdoor pvp events
     // used when initing / cleaning up
-    OutdoorPvPSet  m_OutdoorPvPSet;
+    std::vector<std::unique_ptr<OutdoorPvP>> m_OutdoorPvPSet;
 
     // maps the zone ids to an outdoor pvp event
     // used in player event handling
-    OutdoorPvPMap   m_OutdoorPvPMap;
+    std::map<uint32/*zoneid*/, OutdoorPvP*> m_OutdoorPvPMap;
 
     // Holds the outdoor PvP templates
-    OutdoorPvPDataMap m_OutdoorPvPDatas;
+    std::map<OutdoorPvPTypes, std::unique_ptr<OutdoorPvPData>> m_OutdoorPvPDatas;
 
     // update interval
     uint32 m_UpdateTimer;

@@ -18,6 +18,10 @@ message(STATUS "CMake version: ${CMAKE_VERSION}")
 # CMake policies (can not be handled elsewhere)
 cmake_policy(SET CMP0005 NEW)
 
+if (POLICY CMP0153)
+  cmake_policy(SET CMP0153 OLD)
+endif()
+
 # Set projectname (must be done AFTER setting configurationtypes)
 project(AzerothCore VERSION 3.0.0 LANGUAGES CXX C)
 
@@ -30,6 +34,9 @@ set(CMAKE_SKIP_BUILD_RPATH 0)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH 0)
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH 1)
+
+# Export compile commands for IDE support
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(AC_PATH_ROOT "${CMAKE_SOURCE_DIR}")
 

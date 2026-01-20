@@ -1,28 +1,29 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
+#include "Player.h"
 #include "ScriptedCreature.h"
 #include "Spell.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
-#include "zulgurub.h"
-#include "Player.h"
+#include "SpellScriptLoader.h"
 #include "TaskScheduler.h"
+#include "zulgurub.h"
 
 enum Says
 {
@@ -79,7 +80,7 @@ enum Misc
 
     MODEL_OHGAN_MOUNT         = 15271,
     PATH_MANDOKIR             = 492861,
-    POINT_MANDOKIR_END        = 24,
+    POINT_MANDOKIR_END        = 25,
     CHAINED_SPIRIT_COUNT      = 20,
     ACTION_CHARGE             = 1
 };
@@ -155,7 +156,7 @@ public:
             killCount = 0;
             if (me->GetPositionZ() > 140.0f)
             {
-                events.ScheduleEvent(EVENT_CHECK_START, 1000);
+                events.ScheduleEvent(EVENT_CHECK_START, 1s);
                 if (Creature* speaker = ObjectAccessor::GetCreature(*me, instance->GetGuidData(NPC_VILEBRANCH_SPEAKER)))
                 {
                     if (!speaker->IsAlive())
@@ -208,7 +209,7 @@ public:
 
         void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_PLAYER)
+            if (!victim->IsPlayer())
                 return;
 
             reviveGUID = victim->GetGUID();
@@ -249,7 +250,7 @@ public:
             }
         }
 
-        void SetGUID(ObjectGuid const guid, int32 type) override
+        void SetGUID(ObjectGuid const& guid, int32 type) override
         {
             if (type == ACTION_CHARGE)
             {
@@ -293,7 +294,7 @@ public:
             }
         }
 
-        void DamageDealt(Unit* doneTo, uint32& damage, DamageEffectType /*damagetype*/) override
+        void DamageDealt(Unit* doneTo, uint32& damage, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/) override
         {
             if (doneTo && doneTo == me->GetVictim())
             {
@@ -448,7 +449,7 @@ public:
                             {
                                 if (!me || !target)
                                     return false;
-                                if (target->GetTypeId() != TYPEID_PLAYER || !me->IsWithinLOSInMap(target))
+                                if (!target->IsPlayer() || !me->IsWithinLOSInMap(target))
                                     return false;
                                 return true;
                             }))
@@ -539,7 +540,7 @@ public:
 
         void JustEngagedWith(Unit* who) override
         {
-            if (who->GetTypeId() != TYPEID_PLAYER)
+            if (!who->IsPlayer())
                 return;
 
             _scheduler.Schedule(6s, 12s, [this](TaskContext context)
@@ -556,14 +557,14 @@ public:
 
         void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_PLAYER)
+            if (!victim->IsPlayer())
                 return;
 
             reviveGUID = victim->GetGUID();
             RevivePlayer(victim, reviveGUID);
         }
 
-        void SetGUID(ObjectGuid const guid, int32 /*type = 0 */) override
+        void SetGUID(ObjectGuid const& guid, int32 /*type = 0 */) override
         {
             reviveGUID = guid;
         }
@@ -611,7 +612,7 @@ public:
         revivePlayerGUID.Clear();
     }
 
-    void SetGUID(ObjectGuid const guid, int32 /*id*/) override
+    void SetGUID(ObjectGuid const& guid, int32 /*id*/) override
     {
         revivePlayerGUID = guid;
     }
@@ -640,7 +641,7 @@ public:
             {
                 DoCast(target, SPELL_REVIVE);
             }
-            me->DespawnOrUnsummon(1000);
+            me->DespawnOrUnsummon(1s);
         }
     }
 
@@ -709,44 +710,33 @@ private:
     InstanceScript* instance;
 };
 
-class spell_threatening_gaze : public SpellScriptLoader
+class spell_threatening_gaze_aura : public AuraScript
 {
-public:
-    spell_threatening_gaze() : SpellScriptLoader("spell_threatening_gaze") { }
+    PrepareAuraScript(spell_threatening_gaze_aura);
 
-    class spell_threatening_gaze_AuraScript : public AuraScript
+    void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        PrepareAuraScript(spell_threatening_gaze_AuraScript);
-
-        void OnRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+        if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_EXPIRE)
         {
-            if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_EXPIRE)
+            if (Unit* target = GetTarget())
             {
-                if (Unit* target = GetTarget())
+                if (Unit* caster = GetCaster())
                 {
-                    if (Unit* caster = GetCaster())
+                    if (Creature* cCaster = caster->ToCreature())
                     {
-                        if (Creature* cCaster = caster->ToCreature())
+                        if (cCaster->IsAIEnabled)
                         {
-                            if (cCaster->IsAIEnabled)
-                            {
-                                cCaster->AI()->SetGUID(target->GetGUID(), ACTION_CHARGE);
-                            }
+                            cCaster->AI()->SetGUID(target->GetGUID(), ACTION_CHARGE);
                         }
                     }
                 }
             }
         }
+    }
 
-        void Register() override
-        {
-            OnEffectRemove += AuraEffectRemoveFn(spell_threatening_gaze_AuraScript::OnRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void Register() override
     {
-        return new spell_threatening_gaze_AuraScript();
+        OnEffectRemove += AuraEffectRemoveFn(spell_threatening_gaze_aura::OnRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
@@ -797,7 +787,7 @@ void AddSC_boss_mandokir()
     new npc_ohgan();
     RegisterZulGurubCreatureAI(npc_chained_spirit);
     RegisterZulGurubCreatureAI(npc_vilebranch_speaker);
-    new spell_threatening_gaze();
+    RegisterSpellScript(spell_threatening_gaze_aura);
     RegisterSpellScript(spell_mandokir_charge);
     RegisterSpellScript(spell_threatening_gaze_charge);
 }

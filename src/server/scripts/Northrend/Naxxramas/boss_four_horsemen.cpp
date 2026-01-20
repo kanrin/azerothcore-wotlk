@@ -1,25 +1,26 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "naxxramas.h"
 
 enum Spells
@@ -32,23 +33,17 @@ enum Spells
     SPELL_MARK_OF_ZELIEK                = 28835,
     SPELL_MARK_DAMAGE                   = 28836,
     // Korth'azz
-    SPELL_KORTHAZZ_METEOR_10            = 28884,
-    SPELL_KORTHAZZ_METEOR_25            = 57467,
+    SPELL_KORTHAZZ_METEOR               = 28884,
     // Blaumeux
-    SPELL_BLAUMEUX_SHADOW_BOLT_10       = 57374,
-    SPELL_BLAUMEUX_SHADOW_BOLT_25       = 57464,
-    SPELL_BLAUMEUX_VOID_ZONE_10         = 28863,
-    SPELL_BLAUMEUX_VOID_ZONE_25         = 57463,
+    SPELL_BLAUMEUX_SHADOW_BOLT          = 57374,
+    SPELL_BLAUMEUX_VOID_ZONE            = 28863,
     SPELL_BLAUMEUX_UNYIELDING_PAIN      = 57381,
     // Zeliek
-    SPELL_ZELIEK_HOLY_WRATH_10          = 28883,
-    SPELL_ZELIEK_HOLY_WRATH_25          = 57466,
-    SPELL_ZELIEK_HOLY_BOLT_10           = 57376,
-    SPELL_ZELIEK_HOLY_BOLT_25           = 57465,
+    SPELL_ZELIEK_HOLY_WRATH             = 28883,
+    SPELL_ZELIEK_HOLY_BOLT              = 57376,
     SPELL_ZELIEK_CONDEMNATION           = 57377,
     // Rivendare
-    SPELL_RIVENDARE_UNHOLY_SHADOW_10    = 28882,
-    SPELL_RIVENDARE_UNHOLY_SHADOW_25    = 57369
+    SPELL_RIVENDARE_UNHOLY_SHADOW       = 28882,
 };
 
 enum Events
@@ -86,15 +81,13 @@ enum FourHorsemen
 const uint32 TABLE_SPELL_MARK[4] = {SPELL_MARK_OF_ZELIEK, SPELL_MARK_OF_BLAUMEUX, SPELL_MARK_OF_RIVENDARE, SPELL_MARK_OF_KORTHAZZ};
 
 // PRIMARY SPELL
-const uint32 TABLE_SPELL_PRIMARY_10[4] = {SPELL_ZELIEK_HOLY_BOLT_10, SPELL_BLAUMEUX_SHADOW_BOLT_10, SPELL_RIVENDARE_UNHOLY_SHADOW_10, SPELL_KORTHAZZ_METEOR_10};
-const uint32 TABLE_SPELL_PRIMARY_25[4] = {SPELL_ZELIEK_HOLY_BOLT_25, SPELL_BLAUMEUX_SHADOW_BOLT_25, SPELL_RIVENDARE_UNHOLY_SHADOW_25, SPELL_KORTHAZZ_METEOR_25};
+const uint32 TABLE_SPELL_PRIMARY[4] = {SPELL_ZELIEK_HOLY_BOLT, SPELL_BLAUMEUX_SHADOW_BOLT, SPELL_RIVENDARE_UNHOLY_SHADOW, SPELL_KORTHAZZ_METEOR};
 
 // PUNISH
 const uint32 TABLE_SPELL_PUNISH[4] = {SPELL_ZELIEK_CONDEMNATION, SPELL_BLAUMEUX_UNYIELDING_PAIN, 0, 0};
 
 // SECONDARY SPELL
-const uint32 TABLE_SPELL_SECONDARY_10[4] = {SPELL_ZELIEK_HOLY_WRATH_10, SPELL_BLAUMEUX_VOID_ZONE_10, 0, 0};
-const uint32 TABLE_SPELL_SECONDARY_25[4] = {SPELL_ZELIEK_HOLY_WRATH_25, SPELL_BLAUMEUX_VOID_ZONE_25, 0, 0};
+const uint32 TABLE_SPELL_SECONDARY[4] = {SPELL_ZELIEK_HOLY_WRATH, SPELL_BLAUMEUX_VOID_ZONE, 0, 0};
 
 const Position WaypointPositions[12] =
 {
@@ -130,7 +123,6 @@ public:
     {
         explicit boss_four_horsemenAI(Creature* c) : BossAI(c, BOSS_HORSEMAN)
         {
-            pInstance = me->GetInstanceScript();
             switch (me->GetEntry())
             {
                 case NPC_SIR_ZELIEK:
@@ -149,14 +141,13 @@ public:
         }
 
         EventMap events;
-        InstanceScript* pInstance;
         uint8 currentWaypoint{};
         uint8 movementPhase{};
         uint8 horsemanId;
 
         void MoveToCorner()
         {
-            switch(me->GetEntry())
+            switch (me->GetEntry())
             {
                 case NPC_THANE_KORTHAZZ:
                     currentWaypoint = 0;
@@ -174,14 +165,16 @@ public:
             me->GetMotionMaster()->MovePoint(currentWaypoint, WaypointPositions[currentWaypoint]);
         }
 
-        bool IsInRoom()
+        void EnterEvadeMode(EvadeReason why) override
         {
-            if (me->GetExactDist(2535.1f, -2968.7f, 241.3f) > 100.0f)
+            if (why == EVADE_REASON_BOUNDARY)
             {
-                EnterEvadeMode();
-                return false;
+                instance->GetCreature(DATA_BARON_RIVENDARE_BOSS)->AI()->EnterEvadeMode(EVADE_REASON_OTHER);
+                instance->GetCreature(DATA_LADY_BLAUMEUX_BOSS)->AI()->EnterEvadeMode(EVADE_REASON_OTHER);
+                instance->GetCreature(DATA_SIR_ZELIEK_BOSS)->AI()->EnterEvadeMode(EVADE_REASON_OTHER);
+                instance->GetCreature(DATA_THANE_KORTHAZZ_BOSS)->AI()->EnterEvadeMode(EVADE_REASON_OTHER);
             }
-            return true;
+            BossAI::EnterEvadeMode();
         }
 
         void Reset() override
@@ -202,16 +195,6 @@ public:
             {
                 events.RescheduleEvent(EVENT_SECONDARY_SPELL, 15s);
             }
-            if (pInstance)
-            {
-                if (GameObject* go = me->GetMap()->GetGameObject(pInstance->GetGuidData(DATA_HORSEMEN_GATE)))
-                {
-                    if (pInstance->GetBossState(BOSS_GOTHIK) == DONE)
-                    {
-                        go->SetGoState(GO_STATE_ACTIVE);
-                    }
-                }
-            }
         }
 
         void MovementInform(uint32 type, uint32 id) override
@@ -227,7 +210,7 @@ public:
                 me->SetInCombatWithZone();
                 if (!UpdateVictim())
                 {
-                    EnterEvadeMode();
+                    EnterEvadeMode(EVADE_REASON_NO_HOSTILES);
                     return;
                 }
                 if (me->GetEntry() == NPC_LADY_BLAUMEUX || me->GetEntry() == NPC_SIR_ZELIEK)
@@ -257,40 +240,23 @@ public:
 
         void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() != TYPEID_PLAYER)
+            if (!who->IsPlayer())
                 return;
 
             Talk(SAY_SLAY);
-            if (pInstance)
-            {
-                pInstance->SetData(DATA_IMMORTAL_FAIL, 0);
-            }
+            instance->StorePersistentData(PERSISTENT_DATA_IMMORTAL_FAIL, 1);
         }
 
         void JustDied(Unit*  killer) override
         {
             BossAI::JustDied(killer);
-            if (pInstance)
-            {
-                if (pInstance->GetBossState(BOSS_HORSEMAN) == DONE)
-                {
-                    if (!me->GetMap()->GetPlayers().IsEmpty())
-                    {
-                        if (Player* player = me->GetMap()->GetPlayers().getFirst()->GetSource())
-                        {
-                            if (GameObject* chest = player->SummonGameObject(RAID_MODE(GO_HORSEMEN_CHEST_10, GO_HORSEMEN_CHEST_25), 2514.8f, -2944.9f, 245.55f, 5.51f, 0, 0, 0, 0, 0))
-                            {
-                                chest->SetLootRecipient(me);
-                            }
-                        }
-                    }
-                    if (GameObject* go = me->GetMap()->GetGameObject(pInstance->GetGuidData(DATA_HORSEMEN_GATE)))
-                    {
-                        go->SetGoState(GO_STATE_ACTIVE);
-                    }
-                }
-            }
             Talk(SAY_DEATH);
+
+            if (instance->GetBossState(BOSS_HORSEMAN) == DONE)
+                if (!me->GetMap()->GetPlayers().IsEmpty())
+                    if (Player* player = me->GetMap()->GetPlayers().getFirst()->GetSource())
+                        if (GameObject* chest = player->SummonGameObject(RAID_MODE(GO_HORSEMEN_CHEST_10, GO_HORSEMEN_CHEST_25), 2514.8f, -2944.9f, 245.55f, 5.51f, 0, 0, 0, 0, 0))
+                            chest->SetLootRecipient(me);
         }
 
         void JustEngagedWith(Unit* who) override
@@ -304,13 +270,6 @@ public:
                 me->SetSpeed(MOVE_RUN, me->GetSpeedRate(MOVE_RUN), true);
                 MoveToCorner();
             }
-            if (pInstance)
-            {
-                if (GameObject* go = me->GetMap()->GetGameObject(pInstance->GetGuidData(DATA_HORSEMEN_GATE)))
-                {
-                    go->SetGoState(GO_STATE_READY);
-                }
-            }
         }
 
         void UpdateAI(uint32 diff) override
@@ -320,9 +279,6 @@ public:
                 me->GetMotionMaster()->MovePoint(currentWaypoint, WaypointPositions[currentWaypoint]);
                 currentWaypoint = 0;
             }
-
-            if (!IsInRoom())
-                return;
 
             if (movementPhase < MOVE_PHASE_FINISHED || !UpdateVictim())
                 return;
@@ -343,11 +299,11 @@ public:
                     return;
                 case EVENT_PRIMARY_SPELL:
                     Talk(SAY_TAUNT);
-                    me->CastSpell(me->GetVictim(), RAID_MODE(TABLE_SPELL_PRIMARY_10[horsemanId], TABLE_SPELL_PRIMARY_25[horsemanId]), false);
+                    me->CastSpell(me->GetVictim(), TABLE_SPELL_PRIMARY[horsemanId], false);
                     events.Repeat(15s);
                     return;
                 case EVENT_SECONDARY_SPELL:
-                    me->CastSpell(me->GetVictim(), RAID_MODE(TABLE_SPELL_SECONDARY_10[horsemanId], TABLE_SPELL_SECONDARY_25[horsemanId]), false);
+                    me->CastSpell(me->GetVictim(), TABLE_SPELL_SECONDARY[horsemanId], false);
                     events.Repeat(15s);
                     return;
             }
@@ -363,7 +319,7 @@ public:
                 }
                 if (me->IsWithinDistInMap(me->GetVictim(), 45.0f) && me->IsValidAttackTarget(me->GetVictim()))
                 {
-                    DoCastVictim(RAID_MODE(TABLE_SPELL_PRIMARY_10[horsemanId], TABLE_SPELL_PRIMARY_25[horsemanId]));
+                    DoCastVictim(TABLE_SPELL_PRIMARY[horsemanId]);
                 }
                 else if (!me->IsWithinDistInMap(me->GetVictim(), 45.0f) || !me->IsValidAttackTarget(me->GetVictim()))
                 {
@@ -379,82 +335,59 @@ public:
     };
 };
 
-class spell_four_horsemen_mark : public SpellScriptLoader
+class spell_four_horsemen_mark_aura : public AuraScript
 {
-public:
-    spell_four_horsemen_mark() : SpellScriptLoader("spell_four_horsemen_mark") { }
+    PrepareAuraScript(spell_four_horsemen_mark_aura);
 
-    class spell_four_horsemen_mark_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_four_horsemen_mark_AuraScript);
+        return ValidateSpellInfo({ SPELL_MARK_DAMAGE });
+    }
 
-        void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Unit* caster = GetCaster())
         {
-            if (Unit* caster = GetCaster())
+            int32 damage;
+            switch (GetStackAmount())
             {
-                int32 damage;
-                switch (GetStackAmount())
-                {
-                    case 1:
-                        damage = 0;
-                        break;
-                    case 2:
-                        damage = 500;
-                        break;
-                    case 3:
-                        damage = 1500;
-                        break;
-                    case 4:
-                        damage = 4000;
-                        break;
-                    case 5:
-                        damage = 12500;
-                        break;
-                    case 6:
-                        damage = 20000;
-                        break;
-                    default:
-                        damage = 20000 + 1000 * (GetStackAmount() - 7);
-                        break;
-                }
-                if (damage)
-                {
-                    caster->CastCustomSpell(SPELL_MARK_DAMAGE, SPELLVALUE_BASE_POINT0, damage, GetTarget());
-                }
+                case 1:
+                    damage = 0;
+                    break;
+                case 2:
+                    damage = 500;
+                    break;
+                case 3:
+                    damage = 1500;
+                    break;
+                case 4:
+                    damage = 4000;
+                    break;
+                case 5:
+                    damage = 12500;
+                    break;
+                case 6:
+                    damage = 20000;
+                    break;
+                default:
+                    damage = 20000 + 1000 * (GetStackAmount() - 7);
+                    break;
+            }
+            if (damage)
+            {
+                caster->CastCustomSpell(SPELL_MARK_DAMAGE, SPELLVALUE_BASE_POINT0, damage, GetTarget());
             }
         }
-
-        void Register() override
-        {
-            AfterEffectApply += AuraEffectApplyFn(spell_four_horsemen_mark_AuraScript::OnApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL_OR_REAPPLY_MASK);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
-    {
-        return new spell_four_horsemen_mark_AuraScript();
-    }
-};
-
-class spell_four_horsemen_consumption : public SpellScript
-{
-    PrepareSpellScript(spell_four_horsemen_consumption);
-
-    void HandleDamageCalc(SpellEffIndex /*effIndex*/)
-    {
-        uint32 damage = GetCaster()->GetMap()->ToInstanceMap()->GetDifficulty() == REGULAR_DIFFICULTY ? 2750 : 4250;
-        SetHitDamage(damage);
     }
 
     void Register() override
     {
-        OnEffectHitTarget += SpellEffectFn(spell_four_horsemen_consumption::HandleDamageCalc, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        AfterEffectApply += AuraEffectApplyFn(spell_four_horsemen_mark_aura::OnApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL_OR_REAPPLY_MASK);
     }
 };
 
 void AddSC_boss_four_horsemen()
 {
     new boss_four_horsemen();
-    new spell_four_horsemen_mark();
-    RegisterSpellScript(spell_four_horsemen_consumption);
+    RegisterSpellScript(spell_four_horsemen_mark_aura);
 }

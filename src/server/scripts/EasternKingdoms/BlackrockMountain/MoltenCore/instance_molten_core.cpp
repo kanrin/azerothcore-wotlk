@@ -1,23 +1,23 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
 #include "ObjectMgr.h"
-#include "ScriptMgr.h"
 #include "TemporarySummon.h"
 #include "molten_core.h"
 
@@ -56,7 +56,7 @@ constexpr uint8 SAY_SPAWN = 1;
 class instance_molten_core : public InstanceMapScript
 {
 public:
-    instance_molten_core() : InstanceMapScript(MCScriptName, 409) {}
+    instance_molten_core() : InstanceMapScript(MCScriptName, MAP_MOLTEN_CORE) {}
 
     struct instance_molten_core_InstanceMapScript : public InstanceScript
     {
@@ -111,7 +111,7 @@ public:
                 case NPC_FLAMEWALKER_HEALER:
                 case NPC_FLAMEWALKER_ELITE:
                 {
-                    AddMinion(creature, true);
+                    AddMinion(creature);
                     break;
                 }
             }
@@ -123,7 +123,7 @@ public:
             {
                 case NPC_FIRESWORN:
                 {
-                    AddMinion(creature, false);
+                    RemoveMinion(creature);
                     break;
                 }
                 case NPC_FLAMEWALKER:
@@ -132,7 +132,7 @@ public:
                 case NPC_FLAMEWALKER_HEALER:
                 case NPC_FLAMEWALKER_ELITE:
                 {
-                    AddMinion(creature, false);
+                    RemoveMinion(creature);
                     break;
                 }
             }

@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -20,7 +20,6 @@
 #include "Config.h"
 #include "GameTime.h"
 #include "GridNotifiers.h"
-#include "GridStates.h"
 #include "Group.h"
 #include "InstanceScript.h"
 #include "Log.h"
@@ -33,6 +32,7 @@
 #include "Timer.h"
 #include "Transport.h"
 #include "World.h"
+#include "WorldSessionMgr.h"
 
 uint16 InstanceSaveMgr::ResetTimeDelay[] = {3600, 900, 300, 60, 0};
 PlayerBindStorage InstanceSaveMgr::playerBindStorage;
@@ -82,7 +82,7 @@ InstanceSave* InstanceSaveMgr::AddInstanceSave(uint32 mapId, uint32 instanceId, 
 
     if (difficulty >= (entry->IsRaid() ? MAX_RAID_DIFFICULTY : MAX_DUNGEON_DIFFICULTY))
     {
-        LOG_ERROR("instance.save", "InstanceSaveMgr::AddInstanceSave: mapid = {}, instanceid = {}, wrong dificalty {}!", mapId, instanceId, difficulty);
+        LOG_ERROR("instance.save", "InstanceSaveMgr::AddInstanceSave: mapid = {}, instanceid = {}, wrong difficulty {}!", mapId, instanceId, difficulty);
         return nullptr;
     }
 
@@ -495,7 +495,9 @@ void InstanceSaveMgr::Update()
     {
         LOG_INFO("instance.save", "Instance ID reset occurred, sending updated calendar and raid info to all players!");
         WorldPacket dummy;
-        for (SessionMap::const_iterator itr = sWorld->GetAllSessions().begin(); itr != sWorld->GetAllSessions().end(); ++itr)
+
+        WorldSessionMgr::SessionMap const& sessionMap = sWorldSessionMgr->GetAllSessions();
+        for (WorldSessionMgr::SessionMap::const_iterator itr = sessionMap.begin(); itr != sessionMap.end(); ++itr)
             if (Player* plr = itr->second->GetPlayer())
             {
                 itr->second->HandleCalendarGetCalendar(dummy);

@@ -1,26 +1,26 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "GameTime.h"
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptedGossip.h"
 #include "ScriptedCreature.h"
-#include "ScriptMgr.h"
+#include "ScriptedGossip.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "TaskScheduler.h"
 
 enum Say
@@ -54,15 +54,15 @@ public:
     {
         boss_azuregosAI(Creature* creature) : ScriptedAI(creature)
         {
-            _scheduler.SetValidator([this]
-                {
-                    return !me->HasUnitState(UNIT_STATE_CASTING);
-                });
+            scheduler.SetValidator([this]
+            {
+                return !me->HasUnitState(UNIT_STATE_CASTING);
+            });
         }
 
         void Reset() override
         {
-            _scheduler.CancelAll();
+            scheduler.CancelAll();
             me->SetNpcFlag(UNIT_NPC_FLAG_GOSSIP);
             me->RestoreFaction();
             me->GetMap()->DoForAllPlayers([&](Player* p)
@@ -77,7 +77,7 @@ public:
 
         void KilledUnit(Unit* victim) override
         {
-            if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            if (victim && victim->IsPlayer())
             {
                 Talk(SAY_KILL);
                 victim->CastSpell(victim, SPELL_MARK_OF_FROST, true);
@@ -89,7 +89,7 @@ public:
             DoCastSelf(SPELL_MARK_OF_FROST_AURA);
             Talk(SAY_AGGRO);
 
-            _scheduler
+            scheduler
                 .Schedule(7s, [this](TaskContext context)
                 {
                     DoCastVictim(SPELL_CLEAVE);
@@ -149,14 +149,11 @@ public:
                 return;
             }
 
-            _scheduler.Update(diff, [this]
-                {
-                    DoMeleeAttackIfReady();
-                });
+            scheduler.Update(diff, [this]
+            {
+                DoMeleeAttackIfReady();
+            });
         }
-
-        protected:
-            TaskScheduler _scheduler;
     };
 
     bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 /*action*/) override

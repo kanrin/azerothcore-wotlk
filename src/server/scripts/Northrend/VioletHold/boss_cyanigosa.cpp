@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "SpellInfo.h"
 #include "violet_hold.h"
@@ -34,18 +34,11 @@ enum Yells
 enum eSpells
 {
     SPELL_ARCANE_VACUUM                             = 58694,
-    SPELL_BLIZZARD_N                                = 58693,
-    SPELL_BLIZZARD_H                                = 59369,
+    SPELL_BLIZZARD                                  = 58693,
     SPELL_MANA_DESTRUCTION                          = 59374,
-    SPELL_TAIL_SWEEP_N                              = 58690,
-    SPELL_TAIL_SWEEP_H                              = 59283,
-    SPELL_UNCONTROLLABLE_ENERGY_N                   = 58688,
-    SPELL_UNCONTROLLABLE_ENERGY_H                   = 59281,
+    SPELL_TAIL_SWEEP                                = 58690,
+    SPELL_UNCONTROLLABLE_ENERGY                     = 58688
 };
-
-#define SPELL_BLIZZARD                              DUNGEON_MODE(SPELL_BLIZZARD_N, SPELL_BLIZZARD_H)
-#define SPELL_TAIL_SWEEP                            DUNGEON_MODE(SPELL_TAIL_SWEEP_N, SPELL_TAIL_SWEEP_H)
-#define SPELL_UNCONTROLLABLE_ENERGY                 DUNGEON_MODE(SPELL_UNCONTROLLABLE_ENERGY_N, SPELL_UNCONTROLLABLE_ENERGY_H)
 
 enum eEvents
 {
@@ -99,7 +92,7 @@ public:
         {
             if (!target || !spell)
                 return;
-            switch(spell->Id)
+            switch (spell->Id)
             {
                 case SPELL_ARCANE_VACUUM:
                     target->NearTeleportTo(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() + 10.0f, target->GetOrientation());
@@ -117,7 +110,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -166,7 +159,7 @@ public:
             {
                 me->UpdatePosition(me->GetPositionX(), me->GetPositionY(), h, me->GetOrientation(), true); // move to ground
                 me->StopMovingOnCurrentPos();
-                me->DestroyForNearbyPlayers();
+                me->DestroyForVisiblePlayers();
             }
         }
 

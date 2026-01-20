@@ -1,24 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "AccountScript.h"
 #include "Channel.h"
 #include "Group.h"
 #include "Guild.h"
-#include "ScriptMgr.h"
+#include "PlayerScript.h"
 
 enum IPLoggingTypes
 {
@@ -167,22 +168,30 @@ public:
 class CharacterActionIpLogger : public PlayerScript
 {
 public:
-    CharacterActionIpLogger() : PlayerScript("CharacterActionIpLogger") { }
+    CharacterActionIpLogger() :
+        PlayerScript("CharacterActionIpLogger",
+        {
+            PLAYERHOOK_ON_CREATE,
+            PLAYERHOOK_ON_LOGIN,
+            PLAYERHOOK_ON_LOGOUT
+        })
+    {
+    }
 
     // CHARACTER_CREATE = 7
-    void OnCreate(Player* player) override
+    void OnPlayerCreate(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_CREATE);
     }
 
     // CHARACTER_LOGIN = 8
-    void OnLogin(Player* player) override
+    void OnPlayerLogin(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_LOGIN);
     }
 
     // CHARACTER_LOGOUT = 9
-    void OnLogout(Player* player) override
+    void OnPlayerLogout(Player* player) override
     {
         CharacterIPLogAction(player, CHARACTER_LOGOUT);
     }
@@ -254,16 +263,23 @@ public:
 class CharacterDeleteActionIpLogger : public PlayerScript
 {
 public:
-    CharacterDeleteActionIpLogger() : PlayerScript("CharacterDeleteActionIpLogger") { }
+    CharacterDeleteActionIpLogger() :
+        PlayerScript("CharacterDeleteActionIpLogger",
+        {
+            PLAYERHOOK_ON_DELETE,
+            PLAYERHOOK_ON_FAILED_DELETE
+        })
+    {
+    }
 
     // CHARACTER_DELETE = 10
-    void OnDelete(ObjectGuid guid, uint32 accountId) override
+    void OnPlayerDelete(ObjectGuid guid, uint32 accountId) override
     {
         DeleteIPLogAction(guid, accountId, CHARACTER_DELETE);
     }
 
     // CHARACTER_FAILED_DELETE = 11
-    void OnFailedDelete(ObjectGuid guid, uint32 accountId) override
+    void OnPlayerFailedDelete(ObjectGuid guid, uint32 accountId) override
     {
         DeleteIPLogAction(guid, accountId, CHARACTER_FAILED_DELETE);
     }

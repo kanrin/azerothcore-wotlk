@@ -1,24 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "obsidian_sanctum.h"
 
 enum Says
@@ -81,6 +82,7 @@ enum Spells
     SPELL_SARTHARION_FLAME_BREATH               = 56908,
     SPELL_SARTHARION_TAIL_LASH                  = 56910,
     SPELL_CYCLONE_AURA_PERIODIC                 = 57598,
+    SPELL_LAVA_STRIKE_DUMMY                     = 57578,
     SPELL_LAVA_STRIKE_DUMMY_TRIGGER             = 57697,
     SPELL_LAVA_STRIKE_SUMMON                    = 57572,
     SPELL_SARTHARION_PYROBUFFET                 = 56916,
@@ -101,6 +103,7 @@ enum Spells
     // Misc
     SPELL_FADE_ARMOR                            = 60708,
     SPELL_FLAME_TSUNAMI_DAMAGE_AURA             = 57492,
+    SPELL_FLAME_TSUNAMI_LEAP                    = 60241,
     SPELL_SARTHARION_PYROBUFFET_TRIGGER         = 57557,
 };
 
@@ -127,17 +130,17 @@ enum Misc
     ACTION_DRAKE_DIED                           = 3,
 
     // Movement points
-    POINT_FINAL_TENEBRON                        = 8,
-    POINT_FINAL_SHADRON                         = 4,
-    POINT_FINAL_VESPERON                        = 4,
+    POINT_FINAL_TENEBRON                        = 9,
+    POINT_FINAL_SHADRON                         = 5,
+    POINT_FINAL_VESPERON                        = 5,
 
     // Lava directions. Its used to identify to which side lava was moving by last time
     LAVA_LEFT_SIDE                              = 0,
     LAVA_RIGHT_SIDE                             = 1,
 
     // Counters
-    MAX_LEFT_LAVA_TSUNAMIS                      = 3,
-    MAX_RIGHT_LAVA_TSUNAMIS                     = 2,
+    MAX_LEFT_LAVA_TSUNAMIS                      = 9,
+    MAX_RIGHT_LAVA_TSUNAMIS                     = 6,
     MAX_DRAGONS                                 = 3,
     MAX_AREA_TRIGGER_COUNT                      = 2,
     MAX_CYCLONE_COUNT                           = 5,
@@ -221,12 +224,25 @@ const Position AreaTriggerSummonPos[MAX_AREA_TRIGGER_COUNT] =
     { 3242.84f, 553.979f, 58.8272f, 0.0f },
 };
 
-const float SartharionBoundary[MAX_BOUNDARY_POSITIONS] =
+float const SartharionBoundary[MAX_BOUNDARY_POSITIONS] =
 {
     3218.86f,   // South X
     3275.69f,   // North X
     484.68f,    // East Y
     572.4f      // West Y
+};
+
+float const FlameTsunamiLeftOffsets[MAX_LEFT_LAVA_TSUNAMIS] =
+{
+    476.0f, 484.0f, 492.0f,
+    524.0f, 532.0f, 540.0f,
+    572.0f, 580.0f, 588.0f
+};
+
+float const FlameTsunamiRightOffsets[MAX_RIGHT_LAVA_TSUNAMIS] =
+{
+    500.0f, 508.0f, 516.0f,
+    548.0f, 556.0f, 564.0f
 };
 
 const Position bigIslandMiddlePos = { 3242.822754f, 477.279816f, 57.430473f };
@@ -386,7 +402,7 @@ public:
 
         void KilledUnit(Unit* pVictim) override
         {
-            if (!urand(0, 2) && pVictim->GetTypeId() == TYPEID_PLAYER)
+            if (!urand(0, 2) && pVictim->IsPlayer())
             {
                 Talk(SAY_SARTHARION_SLAY);
             }
@@ -580,7 +596,7 @@ public:
                             }
                         }
 
-                        events.RepeatEvent((below11PctReached ? urand(1400, 2000) : urand(5000, 20000)));
+                        events.Repeat((below11PctReached ? randtime(1400ms, 2s) : randtime(5s, 20s)));
                         break;
                     }
                     case EVENT_SARTHARION_BERSERK:
@@ -617,15 +633,18 @@ public:
         {
             summons.RemoveNotExisting();
             Talk(WHISPER_LAVA_CHURN);
-            extraEvents.ScheduleEvent(EVENT_SARTHARION_START_LAVA, 2s);
-            extraEvents.ScheduleEvent(EVENT_SARTHARION_FINISH_LAVA, 9s);
+            extraEvents.ScheduleEvent(EVENT_SARTHARION_START_LAVA, 3600ms);
+            extraEvents.ScheduleEvent(EVENT_SARTHARION_FINISH_LAVA, 11s);
 
             // Send wave from left
             if (lastLavaSide == LAVA_RIGHT_SIDE)
             {
                 for (uint8 i = 0; i < MAX_LEFT_LAVA_TSUNAMIS; ++i)
                 {
-                    me->SummonCreature(NPC_FLAME_TSUNAMI, 3208.44f, 580.0f - (i * 50.0f), 55.8f, 0.0f, TEMPSUMMON_TIMED_DESPAWN, 12000);
+                    Creature* tsunami = me->SummonCreature(NPC_FLAME_TSUNAMI, 3211.0f, FlameTsunamiLeftOffsets[i], 57.083332f, 0.0f, TEMPSUMMON_TIMED_DESPAWN, 13500);
+
+                    if (((i - 2) % 3 == 0) && tsunami) // If center of wave
+                        tsunami->CastSpell(tsunami, SPELL_FLAME_TSUNAMI_VISUAL, true);
                 }
 
                 lastLavaSide = LAVA_LEFT_SIDE;
@@ -635,7 +654,10 @@ public:
             {
                 for (uint8 i = 0; i < MAX_RIGHT_LAVA_TSUNAMIS; ++i)
                 {
-                    me->SummonCreature(NPC_FLAME_TSUNAMI, 3283.44f, 555.0f - (i * 50.0f), 55.8f, 3.14f, TEMPSUMMON_TIMED_DESPAWN, 12000);
+                    Creature* tsunami = me->SummonCreature(NPC_FLAME_TSUNAMI, 3286.0f, FlameTsunamiRightOffsets[i], 57.083332f, 3.14f, TEMPSUMMON_TIMED_DESPAWN, 13500);
+
+                    if (((i - 2) % 3 == 0) && tsunami) // If center of wave
+                        tsunami->CastSpell(tsunami, SPELL_FLAME_TSUNAMI_VISUAL, true);
                 }
 
                 lastLavaSide = LAVA_RIGHT_SIDE;
@@ -645,24 +667,22 @@ public:
         void SendLavaWaves(bool start)
         {
             if (summons.empty())
-            {
                 return;
-            }
 
             for (ObjectGuid const& guid : summons)
             {
                 Creature* tsunami = ObjectAccessor::GetCreature(*me, guid);
                 if (!tsunami || tsunami->GetEntry() != NPC_FLAME_TSUNAMI)
-                {
                     continue;
-                }
 
-                if (start)
+                if (start) // Movement possibly simplified from official, ideally reevaluate in the future.
                 {
-                    tsunami->GetMotionMaster()->MovePoint(0, ((tsunami->GetPositionX() < 3250.0f) ? 3283.44f : 3208.44f), tsunami->GetPositionY(), tsunami->GetPositionZ());
+                    tsunami->CastSpell(tsunami, SPELL_FLAME_TSUNAMI_DAMAGE_AURA, true);
+                    tsunami->GetMotionMaster()->MovePoint(0, ((tsunami->GetPositionX() < 3250.0f) ? 3286.0f : 3211.0f), tsunami->GetPositionY(), tsunami->GetPositionZ());
                 }
                 else
                 {
+                    tsunami->RemoveAura(SPELL_FLAME_TSUNAMI_DAMAGE_AURA);
                     tsunami->SetObjectScale(0.1f);
                 }
             }
@@ -849,7 +869,7 @@ struct boss_sartharion_dragonAI : public BossAI
 
         if (isCalledBySartharion)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::MaxThreat, 1, 500, true))
+            if (Unit* target = SelectTarget(SelectTargetMethod::MaxThreat, 0, 500, true, false))
             {
                 AttackStart(target);
             }
@@ -874,7 +894,7 @@ struct boss_sartharion_dragonAI : public BossAI
                 Talk(SAY_TENEBRON_DEATH);
                 if (!isCalledBySartharion || instance->GetBossState(DATA_SARTHARION) != IN_PROGRESS)
                 {
-                    instance->SetBossState(DATA_SHADRON, DONE);
+                    instance->SetBossState(DATA_TENEBRON, DONE);
                 }
                 break;
             }
@@ -922,7 +942,7 @@ struct boss_sartharion_dragonAI : public BossAI
 
     void KilledUnit(Unit* victim) final
     {
-        if (victim->GetTypeId() != TYPEID_PLAYER || urand(0, 2))
+        if (!victim->IsPlayer() || urand(0, 2))
         {
             return;
         }
@@ -1068,7 +1088,7 @@ public:
                 Talk(SAY_TENEBRON_RESPOND);
                 me->SetCanFly(true);
                 me->SetSpeed(MOVE_FLIGHT, 3.0f);
-                me->GetMotionMaster()->MovePath(me->GetEntry() * 10, false);
+                me->GetMotionMaster()->MoveWaypoint(me->GetEntry() * 10, false);
             }
         }
 
@@ -1083,7 +1103,7 @@ public:
                         Talk(SAY_TENEBRON_BREATH);
                     }
                     DoCastVictim(SPELL_SHADOW_BREATH, false);
-                    events.RepeatEvent(17500);
+                    events.Repeat(17500ms);
                     break;
                 }
                 case EVENT_MINIBOSS_SHADOW_FISSURE:
@@ -1092,7 +1112,7 @@ public:
                     {
                         DoCast(target, SPELL_SHADOW_FISSURE, false);
                     }
-                    events.RepeatEvent(22500);
+                    events.Repeat(22500ms);
                     break;
                 }
                 case EVENT_MINIBOSS_OPEN_PORTAL:
@@ -1251,7 +1271,7 @@ public:
                 Talk(SAY_SHADRON_RESPOND);
                 me->SetCanFly(true);
                 me->SetSpeed(MOVE_FLIGHT, 3.0f);
-                me->GetMotionMaster()->MovePath(me->GetEntry() * 10, false);
+                me->GetMotionMaster()->MoveWaypoint(me->GetEntry() * 10, false);
             }
         }
 
@@ -1267,7 +1287,7 @@ public:
                     }
 
                     DoCastVictim(SPELL_SHADOW_BREATH, false);
-                    events.RepeatEvent(17500);
+                    events.Repeat(17500ms);
                     break;
                 }
                 case EVENT_MINIBOSS_SHADOW_FISSURE:
@@ -1276,7 +1296,7 @@ public:
                     {
                         DoCast(target, SPELL_SHADOW_FISSURE, false);
                     }
-                    events.RepeatEvent(22500);
+                    events.Repeat(22500ms);
                     break;
                 }
                 case EVENT_MINIBOSS_OPEN_PORTAL:
@@ -1367,7 +1387,7 @@ public:
                 Talk(SAY_SHADRON_RESPOND);
                 me->SetCanFly(true);
                 me->SetSpeed(MOVE_FLIGHT, 3.0f);
-                me->GetMotionMaster()->MovePath(me->GetEntry() * 10, false);
+                me->GetMotionMaster()->MoveWaypoint(me->GetEntry() * 10, false);
             }
         }
 
@@ -1477,7 +1497,7 @@ public:
         {
             if (param == ACTION_SWITCH_PHASE)
             {
-                me->DespawnOrUnsummon(1);
+                me->DespawnOrUnsummon(1ms);
             }
         }
 
@@ -1511,65 +1531,107 @@ public:
     };
 };
 
-class spell_sartharion_lava_strike : public SpellScriptLoader
+class spell_sartharion_lava_strike : public SpellScript
 {
-public:
-    spell_sartharion_lava_strike() : SpellScriptLoader("spell_sartharion_lava_strike") {}
+    PrepareSpellScript(spell_sartharion_lava_strike);
 
-    class spell_sartharion_lava_strike_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareSpellScript(spell_sartharion_lava_strike_SpellScript);
+        return ValidateSpellInfo({ SPELL_LAVA_STRIKE_SUMMON, SPELL_LAVA_STRIKE_DUMMY_TRIGGER });
+    }
 
-        bool spawned;
-
-        bool Load() override
-        {
-            spawned = false;
-            return true;
-        }
-
-        void HandleDummy(SpellEffIndex /*effIndex*/)
-        {
-            if (!GetCaster() || !GetHitUnit())
-                return;
-
-            GetCaster()->CastSpell(GetHitUnit()->GetPositionX(), GetHitUnit()->GetPositionY(), GetHitUnit()->GetPositionZ(), SPELL_LAVA_STRIKE_DUMMY_TRIGGER, true);
-        }
-
-        void HandleSchoolDamage(SpellEffIndex /*effIndex*/)
-        {
-            if (!GetCaster() || !GetHitUnit() || spawned)
-            {
-                return;
-            }
-
-            if (InstanceScript* pInstance = GetCaster()->GetInstanceScript())
-            {
-                if (Creature* sarth = ObjectAccessor::GetCreature(*GetHitUnit(), pInstance->GetGuidData(DATA_SARTHARION)))
-                {
-                    sarth->AI()->SetData(DATA_VOLCANO_BLOWS, GetHitUnit()->GetGUID().GetCounter());
-                    sarth->CastSpell(GetHitUnit(), SPELL_LAVA_STRIKE_SUMMON, true);
-                    spawned = true;
-                }
-            }
-        }
-
-        void Register() override
-        {
-            if (m_scriptSpellId == 57578) // Dummy lava strike
-            {
-                OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike_SpellScript::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
-            }
-            else
-            {
-                OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike_SpellScript::HandleSchoolDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
-            }
-        }
-    };
-
-    SpellScript* GetSpellScript() const override
+    bool Load() override
     {
-        return new spell_sartharion_lava_strike_SpellScript();
+        _spawned = false;
+        return true;
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        if (!GetCaster() || !GetHitUnit())
+        {
+            return;
+        }
+
+        GetCaster()->CastSpell(GetHitUnit()->GetPositionX(), GetHitUnit()->GetPositionY(), GetHitUnit()->GetPositionZ(), SPELL_LAVA_STRIKE_DUMMY_TRIGGER, true);
+    }
+
+    void HandleSchoolDamage(SpellEffIndex /*effIndex*/)
+    {
+        if (!GetCaster() || !GetHitUnit() || _spawned)
+        {
+            return;
+        }
+
+        if (InstanceScript* instance = GetCaster()->GetInstanceScript())
+        {
+            if (Creature* sarth = ObjectAccessor::GetCreature(*GetHitUnit(), instance->GetGuidData(DATA_SARTHARION)))
+            {
+                sarth->AI()->SetData(DATA_VOLCANO_BLOWS, GetHitUnit()->GetGUID().GetCounter());
+                sarth->CastSpell(GetHitUnit(), SPELL_LAVA_STRIKE_SUMMON, true);
+                _spawned = true;
+            }
+        }
+    }
+
+    void Register() override
+    {
+        if (m_scriptSpellId == SPELL_LAVA_STRIKE_DUMMY)
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+        }
+        else
+        {
+            OnEffectHitTarget += SpellEffectFn(spell_sartharion_lava_strike::HandleSchoolDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+        }
+    }
+
+private:
+    bool _spawned;
+};
+
+// 57491 - Flame Tsunami
+class spell_obsidian_sanctum_flame_tsunami : public SpellScript
+{
+    PrepareSpellScript(spell_obsidian_sanctum_flame_tsunami);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_FLAME_TSUNAMI_LEAP });
+    }
+
+    void HandleHit(SpellEffIndex /*effIndex*/)
+    {
+        if (Unit* target = GetHitUnit())
+        {
+            if (!target->HasAura(SPELL_FLAME_TSUNAMI_LEAP))
+            {
+                target->CastSpell(target, SPELL_FLAME_TSUNAMI_LEAP, true);
+                bool isFacingSouth = std::fabs(GetCaster()->GetOrientation() - M_PI) < M_PI / 4;
+                target->KnockbackFrom(isFacingSouth ? 3283.44f : 3208.44f , target->GetPositionY(), 12.5f, 9.0f);
+            }
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_obsidian_sanctum_flame_tsunami::HandleHit, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
+};
+
+// 60241 - Flame Tsunami
+class spell_obsidian_sanctum_flame_tsunami_leap : public SpellScript
+{
+    PrepareSpellScript(spell_obsidian_sanctum_flame_tsunami_leap);
+
+    void HandleLeapBack(SpellEffIndex effIndex)
+    {
+        PreventHitEffect(effIndex);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_obsidian_sanctum_flame_tsunami_leap::HandleLeapBack, EFFECT_0, SPELL_EFFECT_LEAP_BACK);
     }
 };
 
@@ -1580,6 +1642,7 @@ void AddSC_boss_sartharion()
     new boss_sartharion_tenebron();
     new boss_sartharion_vesperon();
     new npc_twilight_summon();
-
-    new spell_sartharion_lava_strike();
+    RegisterSpellScript(spell_sartharion_lava_strike);
+    RegisterSpellScript(spell_obsidian_sanctum_flame_tsunami);
+    RegisterSpellScript(spell_obsidian_sanctum_flame_tsunami_leap);
 }

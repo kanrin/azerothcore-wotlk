@@ -1,27 +1,27 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Containers.h"
+#include "CreatureScript.h"
 #include "ObjectAccessor.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellAuras.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "molten_core.h"
 
 enum Texts
@@ -111,13 +111,13 @@ public:
                     case EVENT_ANTIMAGIC_PULSE:
                     {
                         DoCastSelf(SPELL_ANTIMAGIC_PULSE);
-                        events.RepeatEvent(20000);
+                        events.Repeat(20s);
                         break;
                     }
                     case EVENT_MAGMA_SHACKLES:
                     {
                         DoCastSelf(SPELL_MAGMA_SHACKLES);
-                        events.RepeatEvent(15000);
+                        events.Repeat(15s);
                         break;
                     }
                 }
@@ -172,75 +172,52 @@ public:
 };
 
 // 23487 Separation Anxiety (server side)
-class spell_garr_separation_nexiety : public SpellScriptLoader
+class spell_garr_separation_anxiety_aura : public AuraScript
 {
-public:
-    spell_garr_separation_nexiety() : SpellScriptLoader("spell_garr_separation_nexiety") {}
+    PrepareAuraScript(spell_garr_separation_anxiety_aura);
 
-    class spell_garr_separation_nexiety_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spell*/) override
     {
-        PrepareAuraScript(spell_garr_separation_nexiety_AuraScript);
+        return ValidateSpellInfo({ SPELL_SEPARATION_ANXIETY_MINION });
+    }
 
-        bool Validate(SpellInfo const* /*spell*/) override
-        {
-            return ValidateSpellInfo({ SPELL_SEPARATION_ANXIETY_MINION });
-        }
-
-        void HandlePeriodic(AuraEffect const* aurEff)
-        {
-            Unit const* caster = GetCaster();
-            Unit* target = GetTarget();
-            if (caster && target && target->GetDistance(caster) > 40.0f && !target->HasAura(SPELL_SEPARATION_ANXIETY_MINION))
-            {
-                target->CastSpell(target, SPELL_SEPARATION_ANXIETY_MINION, true, nullptr, aurEff);
-            }
-        }
-
-        void Register() override
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_garr_separation_nexiety_AuraScript::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    // Should return a fully valid AuraScript pointer.
-    AuraScript* GetAuraScript() const override
+    void HandlePeriodic(AuraEffect const* aurEff)
     {
-        return new spell_garr_separation_nexiety_AuraScript();
+        Unit const* caster = GetCaster();
+        Unit* target = GetTarget();
+        if (caster && target && target->GetDistance(caster) > 40.0f && !target->HasAura(SPELL_SEPARATION_ANXIETY_MINION))
+        {
+            target->CastSpell(target, SPELL_SEPARATION_ANXIETY_MINION, true, nullptr, aurEff);
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_garr_separation_anxiety_aura::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
 //19515 Frenzy (SERVERSIDE)
-class spell_garr_frenzy : public SpellScriptLoader
+class spell_garr_frenzy : public SpellScript
 {
-public:
-    spell_garr_frenzy() : SpellScriptLoader("spell_garr_frenzy") {}
+    PrepareSpellScript(spell_garr_frenzy);
 
-    class spell_garr_frenzy_SpellScript : public SpellScript
+    bool Validate(SpellInfo const* /*spell*/) override
     {
-        PrepareSpellScript(spell_garr_frenzy_SpellScript);
+        return ValidateSpellInfo({ SPELL_FRENZY });
+    }
 
-        bool Validate(SpellInfo const* /*spell*/) override
-        {
-            return ValidateSpellInfo({ SPELL_FRENZY });
-        }
-
-        void HandleHit(SpellEffIndex /*effIndex*/)
-        {
-            if (Unit* target = GetHitUnit())
-            {
-                target->CastSpell(target, SPELL_FRENZY);
-            }
-        }
-
-        void Register() override
-        {
-            OnEffectHitTarget += SpellEffectFn(spell_garr_frenzy_SpellScript::HandleHit, EFFECT_0, SPELL_EFFECT_DUMMY);
-        }
-    };
-
-    SpellScript* GetSpellScript() const override
+    void HandleHit(SpellEffIndex /*effIndex*/)
     {
-        return new spell_garr_frenzy_SpellScript();
+        if (Unit* target = GetHitUnit())
+        {
+            target->CastSpell(target, SPELL_FRENZY);
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_garr_frenzy::HandleHit, EFFECT_0, SPELL_EFFECT_DUMMY);
     }
 };
 
@@ -250,6 +227,6 @@ void AddSC_boss_garr()
     new npc_garr_firesworn();
 
     // Spells
-    new spell_garr_separation_nexiety();
-    new spell_garr_frenzy();
+    RegisterSpellScript(spell_garr_separation_anxiety_aura);
+    RegisterSpellScript(spell_garr_frenzy);
 }

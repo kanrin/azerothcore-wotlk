@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -23,6 +23,20 @@
 #include "StringFormat.h"
 #include <array>
 #include <vector>
+
+/** @file DatabaseWorkerPool.h */
+
+/**
+* @def MIN_MYSQL_CLIENT_VERSION
+* The minimum MySQL Client Version
+*/
+#define MIN_MYSQL_CLIENT_VERSION 80000u
+
+/**
+* @def MIN_MYSQL_SERVER_VERSION
+* The minimum MySQL Server Version
+*/
+#define MIN_MYSQL_SERVER_VERSION "8.0.0"
 
 template <typename T>
 class ProducerConsumerQueue;
@@ -75,7 +89,7 @@ public:
         if (sql.empty())
             return;
 
-        Execute(Acore::StringFormatFmt(sql, std::forward<Args>(args)...));
+        Execute(Acore::StringFormat(sql, std::forward<Args>(args)...));
     }
 
     //! Enqueues a one-way SQL operation in prepared statement format that will be executed asynchronously.
@@ -98,7 +112,7 @@ public:
         if (sql.empty())
             return;
 
-        DirectExecute(Acore::StringFormatFmt(sql, std::forward<Args>(args)...));
+        DirectExecute(Acore::StringFormat(sql, std::forward<Args>(args)...));
     }
 
     //! Directly executes a one-way SQL operation in prepared statement format, that will block the calling thread until finished.
@@ -121,7 +135,7 @@ public:
         if (sql.empty())
             return QueryResult(nullptr);
 
-        return Query(Acore::StringFormatFmt(sql, std::forward<Args>(args)...));
+        return Query(Acore::StringFormat(sql, std::forward<Args>(args)...));
     }
 
     //! Directly executes an SQL query in prepared format that will block the calling thread until finished.
@@ -199,7 +213,7 @@ public:
 #endif
     }
 
-    [[nodiscard]] size_t QueueSize() const;
+    [[nodiscard]] std::size_t QueueSize() const;
 
 private:
     uint32 OpenConnections(InternalIndex type, uint8 numConnections);
@@ -225,4 +239,4 @@ private:
 #endif
 };
 
-#endif
+#endif // _DATABASEWORKERPOOL_H

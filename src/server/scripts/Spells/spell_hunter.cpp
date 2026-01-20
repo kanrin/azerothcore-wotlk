@@ -1,35 +1,35 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Cell.h"
+#include "CellImpl.h"
+#include "CreatureScript.h"
+#include "GridNotifiers.h"
+#include "Pet.h"
+#include "SpellAuraEffects.h"
+#include "SpellAuras.h"
+#include "SpellMgr.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
 /*
  * Scripts for spells with SPELLFAMILY_HUNTER, SPELLFAMILY_PET and SPELLFAMILY_GENERIC spells used by hunter players.
  * Ordered alphabetically using scriptname.
  * Scriptnames of files in this file should be prefixed with "spell_hun_".
  */
-
-#include "Cell.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "Pet.h"
-#include "ScriptMgr.h"
-#include "SpellAuraEffects.h"
-#include "SpellAuras.h"
-#include "SpellMgr.h"
-#include "SpellScript.h"
 
 /// @todo: this import is not necessary for compilation and marked as unused by the IDE
 //  however, for some reasons removing it would cause a damn linking issue
@@ -39,10 +39,7 @@
 
 enum HunterSpells
 {
-    // Ours
     SPELL_HUNTER_WYVERN_STING_DOT                   = 24131,
-
-    // Theirs
     SPELL_HUNTER_ASPECT_OF_THE_BEAST                = 13161,
     SPELL_HUNTER_ASPECT_OF_THE_BEAST_PET            = 61669,
     SPELL_HUNTER_ASPECT_OF_THE_VIPER                = 34074,
@@ -69,7 +66,8 @@ enum HunterSpells
     SPELL_DRAENEI_GIFT_OF_THE_NAARU                 = 59543,
     SPELL_HUNTER_GLYPH_OF_ARCANE_SHOT               = 61389,
     SPELL_LOCK_AND_LOAD_TRIGGER                     = 56453,
-    SPELL_LOCK_AND_LOAD_MARKER                      = 67544
+    SPELL_LOCK_AND_LOAD_MARKER                      = 67544,
+    SPELL_HUNTER_PET_LEGGINGS_OF_BEAST_MASTERY      = 38297, // Leggings of Beast Mastery
 };
 
 class spell_hun_check_pet_los : public SpellScript
@@ -165,6 +163,10 @@ class spell_hun_generic_scaling : public AuraScript
             SpellSchoolMask schoolMask = SpellSchoolMask(aurEff->GetSpellInfo()->Effects[aurEff->GetEffIndex()].MiscValue);
             int32 modifier = schoolMask == SPELL_SCHOOL_MASK_NORMAL ? 35 : 40;
             amount = CalculatePct(std::max<int32>(0, owner->GetResistance(schoolMask)), modifier);
+            if (owner->HasAura(SPELL_HUNTER_PET_LEGGINGS_OF_BEAST_MASTERY) && schoolMask == SPELL_SCHOOL_MASK_NORMAL)
+            {
+                amount += 490;
+            }
         }
     }
 
@@ -176,10 +178,14 @@ class spell_hun_generic_scaling : public AuraScript
             int32 modifier = 45;
 
             // xinef: Wild Hunt bonus for stamina
-            if  (AuraEffect* wildHuntEff = GetUnitOwner()->GetDummyAuraEffect(SPELLFAMILY_PET, 3748, EFFECT_0))
+            if (AuraEffect* wildHuntEff = GetUnitOwner()->GetDummyAuraEffect(SPELLFAMILY_PET, 3748, EFFECT_0))
                 AddPct(modifier, wildHuntEff->GetAmount());
 
             amount = CalculatePct(std::max<int32>(0, owner->GetStat(Stats(aurEff->GetSpellInfo()->Effects[aurEff->GetEffIndex()].MiscValue))), modifier);
+            if (owner->HasAura(SPELL_HUNTER_PET_LEGGINGS_OF_BEAST_MASTERY))
+            {
+                amount += 52;
+            }
         }
     }
 
@@ -201,6 +207,10 @@ class spell_hun_generic_scaling : public AuraScript
                 ownerAP += CalculatePct(owner->GetStat(STAT_STAMINA), HvWEff->GetAmount());
 
             amount = CalculatePct(std::max<int32>(0, ownerAP), modifier);
+            if (owner->HasAura(SPELL_HUNTER_PET_LEGGINGS_OF_BEAST_MASTERY))
+            {
+                amount += 70;
+            }
         }
     }
 
@@ -218,7 +228,7 @@ class spell_hun_generic_scaling : public AuraScript
             amount = CalculatePct(std::max<int32>(0, owner->GetTotalAttackPowerValue(RANGED_ATTACK)), modifier);
 
             // xinef: Update appropriate player field
-            if (owner->GetTypeId() == TYPEID_PLAYER)
+            if (owner->IsPlayer())
                 owner->SetUInt32Value(PLAYER_PET_SPELL_POWER, (uint32)amount);
         }
     }
@@ -292,7 +302,7 @@ class spell_hun_taming_the_beast : public AuraScript
     {
         if (Unit* target = GetTarget())
             if (Creature* creature = target->ToCreature())
-                creature->DespawnOrUnsummon(1);
+                creature->DespawnOrUnsummon(1ms);
     }
 
     void Register() override
@@ -309,7 +319,7 @@ class spell_hun_aspect_of_the_beast : public AuraScript
 
     bool Load() override
     {
-        return GetCaster() && GetCaster()->GetTypeId() == TYPEID_PLAYER;
+        return GetCaster() && GetCaster()->IsPlayer();
     }
 
     bool Validate(SpellInfo const* /*spellInfo*/) override
@@ -642,7 +652,7 @@ class spell_hun_readiness : public SpellScript
 
     bool Load() override
     {
-        return GetCaster()->GetTypeId() == TYPEID_PLAYER;
+        return GetCaster()->IsPlayer();
     }
 
     void HandleDummy(SpellEffIndex /*effIndex*/)
@@ -658,7 +668,7 @@ class spell_hun_readiness : public SpellScript
         std::set<std::pair<uint32, bool>> spellsToRemove;
         std::set<uint32> categoriesToRemove;
 
-        for (const auto& [spellId, cooldown] : cooldowns)
+        for (auto const& [spellId, cooldown] : cooldowns)
         {
             SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
             if (spellInfo
@@ -676,9 +686,9 @@ class spell_hun_readiness : public SpellScript
         }
 
         // we can't remove spell cooldowns while iterating.
-        for (const auto& [spellId, sendToClient] : spellsToRemove)
+        for (auto const& [spellId, sendToClient] : spellsToRemove)
             caster->RemoveSpellCooldown(spellId, sendToClient);
-        for (const auto& category : categoriesToRemove)
+        for (auto const& category : categoriesToRemove)
             caster->RemoveCategoryCooldown(category);
     }
 
@@ -695,7 +705,7 @@ class spell_hun_scatter_shot : public SpellScript
 
     bool Load() override
     {
-        return GetCaster()->GetTypeId() == TYPEID_PLAYER;
+        return GetCaster()->IsPlayer();
     }
 
     void HandleDummy(SpellEffIndex /*effIndex*/)
@@ -833,11 +843,7 @@ class spell_hun_pet_carrion_feeder : public SpellScript
         // search for nearby enemy corpse in range
         Acore::AnyDeadUnitSpellTargetInRangeCheck check(caster, max_range, GetSpellInfo(), TARGET_CHECK_ENEMY);
         Acore::WorldObjectSearcher<Acore::AnyDeadUnitSpellTargetInRangeCheck> searcher(caster, result, check);
-        Cell::VisitWorldObjects(caster, searcher, max_range);
-        if (!result)
-        {
-            Cell::VisitGridObjects(caster, searcher, max_range);
-        }
+        Cell::VisitObjects(caster, searcher, max_range);
         if (!result)
         {
             return SPELL_FAILED_NO_EDIBLE_CORPSES;
@@ -874,8 +880,12 @@ class spell_hun_misdirection : public AuraScript
             GetTarget()->ResetRedirectThreat();
     }
 
-    bool CheckProc(ProcEventInfo& /*eventInfo*/)
+    bool CheckProc(ProcEventInfo& eventInfo)
     {
+        // Do not trigger from Mend Pet
+        if ((eventInfo.GetProcSpell() && (eventInfo.GetProcSpell()->GetSpellInfo()->SpellFamilyFlags[0] & 0x800000)) || (eventInfo.GetHealInfo() && (eventInfo.GetHealInfo()->GetSpellInfo()->SpellFamilyFlags[0] & 0x800000)))
+            return false;
+
         return GetTarget()->GetRedirectThreatTarget();
     }
 
@@ -917,7 +927,7 @@ class spell_hun_disengage : public SpellScript
     SpellCastResult CheckCast()
     {
         Unit* caster = GetCaster();
-        if (caster->GetTypeId() == TYPEID_PLAYER && !caster->IsInCombat())
+        if (caster->IsPlayer() && !caster->IsInCombat())
             return SPELL_FAILED_CANT_DO_THAT_RIGHT_NOW;
 
         return SPELL_CAST_OK;
@@ -937,7 +947,7 @@ class spell_hun_tame_beast : public SpellScript
     SpellCastResult CheckCast()
     {
         Unit* caster = GetCaster();
-        if (caster->GetTypeId() != TYPEID_PLAYER)
+        if (!caster->IsPlayer())
             return SPELL_FAILED_DONT_REPORT;
 
         Player* player = GetCaster()->ToPlayer();
@@ -1123,7 +1133,7 @@ class spell_hun_volley_trigger : public SpellScript
         {
             if (Unit* pet = *itr)
             {
-                if (pet->IsAlive() && pet->GetTypeId() == TYPEID_UNIT)
+                if (pet->IsAlive() && pet->IsCreature())
                 {
                     pet->ToCreature()->AI()->OwnerAttacked(_target->ToUnit());
                 }
@@ -1282,7 +1292,7 @@ class spell_hun_bestial_wrath : public SpellScript
     SpellCastResult CheckCast()
     {
         Unit* caster = GetCaster();
-        if (!caster || caster->GetTypeId() != TYPEID_PLAYER)
+        if (!caster || !caster->IsPlayer())
         {
             return SPELL_FAILED_NO_VALID_TARGETS;
         }
@@ -1333,6 +1343,27 @@ class spell_hun_target_self_and_pet : public SpellScript
     }
 };
 
+// -53301 - Explosive Shot
+class spell_hun_explosive_shot : public SpellScript
+{
+    PrepareSpellScript(spell_hun_explosive_shot);
+
+    void HandleFinish()
+    {
+        // Handling of explosive shot initial cast without LnL proc
+        if (!GetCaster() || !GetCaster()->IsPlayer())
+            return;
+
+        if (!GetCaster()->HasAura(SPELL_LOCK_AND_LOAD_TRIGGER))
+            GetSpell()->TakeAmmo();
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_hun_explosive_shot::HandleFinish);
+    }
+};
+
 void AddSC_hunter_spell_scripts()
 {
     RegisterSpellScript(spell_hun_check_pet_los);
@@ -1364,4 +1395,5 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_intimidation);
     RegisterSpellScript(spell_hun_bestial_wrath);
     RegisterSpellScript(spell_hun_target_self_and_pet);
+    RegisterSpellScript(spell_hun_explosive_shot);
 }

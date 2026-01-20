@@ -1,20 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Chat.h"
 #include "Item.h"
 #include "Language.h"
 #include "Log.h"
@@ -69,14 +70,12 @@ void WorldSession::SendTradeStatus(TradeStatus status)
 
 void WorldSession::HandleIgnoreTradeOpcode(WorldPacket& /*recvPacket*/)
 {
-    LOG_DEBUG("network", "WORLD: Ignore Trade {}", _player->GetGUID().ToString());
-    // recvPacket.print_storage();
+    _player->TradeCancel(true, TRADE_STATUS_IGNORE_YOU);
 }
 
 void WorldSession::HandleBusyTradeOpcode(WorldPacket& /*recvPacket*/)
 {
-    LOG_DEBUG("network", "WORLD: Busy Trade {}", _player->GetGUID().ToString());
-    // recvPacket.print_storage();
+    _player->TradeCancel(true, TRADE_STATUS_BUSY);
 }
 
 void WorldSession::SendUpdateTrade(bool trader_data /*= true*/)
@@ -101,7 +100,7 @@ void WorldSession::SendUpdateTrade(bool trader_data /*= true*/)
             data << uint32(item->GetTemplate()->DisplayInfoID);// display id
             data << uint32(item->GetCount());               // stack count
             // wrapped: hide stats but show giftcreator name
-            data << uint32(item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FIELD_FLAG_WRAPPED) ? 1 : 0);
+            data << uint32(item->IsWrapped() ? 1 : 0);
             data << item->GetGuidValue(ITEM_FIELD_GIFTCREATOR);
             // perm. enchantment and gems
             data << uint32(item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT));
@@ -153,7 +152,7 @@ void WorldSession::moveItems(Item* myItems[], Item* hisItems[])
                 LOG_DEBUG("network", "partner storing: {}", myItems[i]->GetGUID().ToString());
 
                 // adjust time (depends on /played)
-                if (myItems[i]->HasFlag(ITEM_FIELD_FLAGS, ITEM_FIELD_FLAG_BOP_TRADEABLE))
+                if (myItems[i]->IsBOPTradable())
                     myItems[i]->SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, trader->GetTotalPlayedTime() - (_player->GetTotalPlayedTime() - myItems[i]->GetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME)));
                 // store
                 trader->MoveItemToInventory(traderDst, myItems[i], true, true);
@@ -164,7 +163,7 @@ void WorldSession::moveItems(Item* myItems[], Item* hisItems[])
                 LOG_DEBUG("network", "player storing: {}", hisItems[i]->GetGUID().ToString());
 
                 // adjust time (depends on /played)
-                if (hisItems[i]->HasFlag(ITEM_FIELD_FLAGS, ITEM_FIELD_FLAG_BOP_TRADEABLE))
+                if (hisItems[i]->IsBOPTradable())
                     hisItems[i]->SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, _player->GetTotalPlayedTime() - (trader->GetTotalPlayedTime() - hisItems[i]->GetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME)));
                 // store
                 _player->MoveItemToInventory(playerDst, hisItems[i], true, true);
@@ -264,7 +263,7 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
     // not accept case incorrect money amount
     if (!_player->HasEnoughMoney(my_trade->GetMoney()))
     {
-        SendNotification(LANG_NOT_ENOUGH_GOLD);
+        ChatHandler(this).SendNotification(LANG_NOT_ENOUGH_GOLD);
         my_trade->SetAccepted(false, true);
         return;
     }
@@ -272,7 +271,7 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
     // not accept case incorrect money amount
     if (!trader->HasEnoughMoney(his_trade->GetMoney()))
     {
-        trader->GetSession()->SendNotification(LANG_NOT_ENOUGH_GOLD);
+        ChatHandler(trader->GetSession()).SendNotification(LANG_NOT_ENOUGH_GOLD);
         his_trade->SetAccepted(false, true);
         return;
     }
@@ -339,10 +338,10 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         // not accept if spell can't be casted now (cheating)
         if (uint32 my_spell_id = my_trade->GetSpell())
         {
-            SpellInfo const* spellEntry = sSpellMgr->GetSpellInfo(my_spell_id);
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(my_spell_id);
             Item* castItem = my_trade->GetSpellCastItem();
 
-            if (!spellEntry || !his_trade->GetItem(TRADE_SLOT_NONTRADED) ||
+            if (!spellInfo || !his_trade->GetItem(TRADE_SLOT_NONTRADED) ||
                     (my_trade->HasSpellCastItem() && !castItem))
             {
                 clearAcceptTradeMode(my_trade, his_trade);
@@ -352,7 +351,7 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
                 return;
             }
 
-            my_spell = new Spell(_player, spellEntry, TRIGGERED_FULL_MASK);
+            my_spell = new Spell(_player, spellInfo, TRIGGERED_FULL_MASK);
             my_spell->m_CastItem = castItem;
             my_targets.SetTradeItemTarget(_player);
             my_spell->m_targets = my_targets;
@@ -374,10 +373,10 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         // not accept if spell can't be casted now (cheating)
         if (uint32 his_spell_id = his_trade->GetSpell())
         {
-            SpellInfo const* spellEntry = sSpellMgr->GetSpellInfo(his_spell_id);
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(his_spell_id);
             Item* castItem = his_trade->GetSpellCastItem();
 
-            if (!spellEntry || !my_trade->GetItem(TRADE_SLOT_NONTRADED) || (his_trade->HasSpellCastItem() && !castItem))
+            if (!spellInfo || !my_trade->GetItem(TRADE_SLOT_NONTRADED) || (his_trade->HasSpellCastItem() && !castItem))
             {
                 delete my_spell;
                 his_trade->SetSpell(0);
@@ -387,7 +386,7 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
                 return;
             }
 
-            his_spell = new Spell(trader, spellEntry, TRIGGERED_FULL_MASK);
+            his_spell = new Spell(trader, spellInfo, TRIGGERED_FULL_MASK);
             his_spell->m_CastItem = castItem;
             his_targets.SetTradeItemTarget(trader);
             his_spell->m_targets = his_targets;
@@ -422,8 +421,8 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         {
             clearAcceptTradeMode(my_trade, his_trade);
 
-            SendNotification(LANG_NOT_FREE_TRADE_SLOTS);
-            trader->GetSession()->SendNotification(LANG_NOT_PARTNER_FREE_TRADE_SLOTS);
+            ChatHandler(this).SendNotification(LANG_NOT_FREE_TRADE_SLOTS);
+            ChatHandler(trader->GetSession()).SendNotification(LANG_NOT_PARTNER_FREE_TRADE_SLOTS);
             my_trade->SetAccepted(false);
             his_trade->SetAccepted(false);
             delete my_spell;
@@ -434,8 +433,8 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         {
             clearAcceptTradeMode(my_trade, his_trade);
 
-            SendNotification(LANG_NOT_PARTNER_FREE_TRADE_SLOTS);
-            trader->GetSession()->SendNotification(LANG_NOT_FREE_TRADE_SLOTS);
+            ChatHandler(this).SendNotification(LANG_NOT_PARTNER_FREE_TRADE_SLOTS);
+            ChatHandler(trader->GetSession()).SendNotification(LANG_NOT_FREE_TRADE_SLOTS);
             my_trade->SetAccepted(false);
             his_trade->SetAccepted(false);
             delete my_spell;
@@ -461,12 +460,12 @@ void WorldSession::HandleAcceptTradeOpcode(WorldPacket& /*recvPacket*/)
         // execute trade: 2. store
         moveItems(myItems, hisItems);
 
-        if( my_trade->GetMoney() >= 10 * GOLD )
+        if (my_trade->GetMoney() >= 10 * GOLD )
         {
             CharacterDatabase.Execute("INSERT INTO log_money VALUES({}, {}, \"{}\", \"{}\", {}, \"{}\", {}, \"goods\", NOW(), {})",
                 GetAccountId(), _player->GetGUID().GetCounter(), _player->GetName(), GetRemoteAddress(), trader->GetSession()->GetAccountId(), trader->GetName(), my_trade->GetMoney(), 6);
         }
-        if( his_trade->GetMoney() >= 10 * GOLD )
+        if (his_trade->GetMoney() >= 10 * GOLD )
         {
             CharacterDatabase.Execute("INSERT INTO log_money VALUES({}, {}, \"{}\", \"{}\", {}, \"{}\", {}, \"goods\", NOW(), {})",
                 trader->GetSession()->GetAccountId(), trader->GetGUID().GetCounter(), trader->GetName(), trader->GetSession()->GetRemoteAddress(), GetAccountId(), _player->GetName(), his_trade->GetMoney(), 6);
@@ -525,12 +524,12 @@ void WorldSession::HandleBeginTradeOpcode(WorldPacket& /*recvPacket*/)
     SendTradeStatus(TRADE_STATUS_OPEN_WINDOW);
 }
 
-void WorldSession::SendCancelTrade()
+void WorldSession::SendCancelTrade(TradeStatus status)
 {
     if (PlayerRecentlyLoggedOut() || PlayerLogout())
         return;
 
-    SendTradeStatus(TRADE_STATUS_TRADE_CANCELED);
+    SendTradeStatus(status);
 }
 
 void WorldSession::HandleCancelTradeOpcode(WorldPacket& /*recvPacket*/)
@@ -574,7 +573,7 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
 
     if (GetPlayer()->GetLevel() < sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ))
     {
-        SendNotification(GetAcoreString(LANG_TRADE_REQ), sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ));
+        ChatHandler(this).SendNotification(LANG_TRADE_REQ, sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ));
         return;
     }
 
@@ -619,12 +618,6 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    if (pOther->GetSocial()->HasIgnore(GetPlayer()->GetGUID()))
-    {
-        SendTradeStatus(TRADE_STATUS_IGNORE_YOU);
-        return;
-    }
-
     if (!sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_TRADE) && pOther->GetTeamId() != _player->GetTeamId())
     {
         SendTradeStatus(TRADE_STATUS_WRONG_FACTION);
@@ -639,11 +632,11 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
 
     if (pOther->GetLevel() < sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ))
     {
-        SendNotification(GetAcoreString(LANG_TRADE_OTHER_REQ), sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ));
+        ChatHandler(this).SendNotification(LANG_TRADE_OTHER_REQ, sWorld->getIntConfig(CONFIG_TRADE_LEVEL_REQ));
         return;
     }
 
-    if (!sScriptMgr->CanInitTrade(_player, pOther))
+    if (!sScriptMgr->OnPlayerCanInitTrade(_player, pOther))
         return;
 
     // OK start trade
@@ -653,7 +646,7 @@ void WorldSession::HandleInitiateTradeOpcode(WorldPacket& recvPacket)
     WorldPacket data(SMSG_TRADE_STATUS, 12);
     data << uint32(TRADE_STATUS_BEGIN_TRADE);
     data << _player->GetGUID();
-    pOther->GetSession()->SendPacket(&data);
+    pOther->SendDirectMessage(&data);
 }
 
 void WorldSession::HandleSetTradeGoldOpcode(WorldPacket& recvPacket)
@@ -705,6 +698,15 @@ void WorldSession::HandleSetTradeItemOpcode(WorldPacket& recvPacket)
     {
         // cheating attempt
         SendTradeStatus(TRADE_STATUS_TRADE_CANCELED);
+        return;
+    }
+
+    // PlayerScript Hook for checking traded items if we want to filter them in a custom module
+    if (!sScriptMgr->OnPlayerCanSetTradeItem(_player, item, tradeSlot))
+    {
+        // Do not send TRADE_STATUS_TRADE_CANCELED because it will cause double display of "Transaction canceled" notification
+        // On the trade initiator screen
+        SendTradeStatus(TRADE_STATUS_CLOSE_WINDOW);
         return;
     }
 

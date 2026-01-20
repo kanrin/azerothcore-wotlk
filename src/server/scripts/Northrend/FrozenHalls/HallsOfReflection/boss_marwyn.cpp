@@ -1,21 +1,26 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
+#include "SpellScriptLoader.h"
 #include "halls_of_reflection.h"
+#include "ScriptedCreature.h"
+#include "SpellAuraEffects.h"
+#include "SpellScript.h"
 
 enum Yells
 {
@@ -149,7 +154,7 @@ public:
 
         void KilledUnit(Unit* who) override
         {
-            if (who->GetTypeId() == TYPEID_PLAYER)
+            if (who->IsPlayer())
                 Talk(SAY_SLAY);
         }
 
@@ -167,50 +172,49 @@ public:
     }
 };
 
-class spell_hor_shared_suffering : public SpellScriptLoader
+enum SharedSufferingAura
 {
-public:
-    spell_hor_shared_suffering() : SpellScriptLoader("spell_hor_shared_suffering") { }
+    SPELL_SHARED_SUFFERING_DAMAGE = 72373
+};
 
-    class spell_hor_shared_sufferingAuraScript : public AuraScript
+class spell_hor_shared_suffering_aura : public AuraScript
+{
+    PrepareAuraScript(spell_hor_shared_suffering_aura);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_hor_shared_sufferingAuraScript);
+        return ValidateSpellInfo({ SPELL_SHARED_SUFFERING_DAMAGE });
+    }
 
-        void OnRemove(AuraEffect const* aurEff, AuraEffectHandleModes  /*mode*/)
-        {
-            if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_ENEMY_SPELL) // dispelled
-                if (Unit* caster = GetCaster())
-                    if (Map* map = caster->FindMap())
-                        if (Aura* a = aurEff->GetBase())
-                        {
-                            uint32 count = 0;
-                            uint32 ticks = 0;
-                            uint32 dmgPerTick = a->GetSpellInfo()->Effects[0].BasePoints;
-                            Map::PlayerList const& pl = map->GetPlayers();
-                            for (Map::PlayerList::const_iterator itr = pl.begin(); itr != pl.end(); ++itr)
-                                if (Player* p = itr->GetSource())
-                                    if (p->IsAlive())
-                                        ++count;
-                            ticks = (a->GetDuration() / int32(a->GetSpellInfo()->Effects[0].Amplitude)) + 1;
-                            int32 dmg = (ticks * dmgPerTick) / count;
-                            caster->CastCustomSpell(GetTarget(), 72373, nullptr, &dmg, nullptr, true);
-                        }
-        }
-
-        void Register() override
-        {
-            AfterEffectRemove += AuraEffectRemoveFn(spell_hor_shared_sufferingAuraScript::OnRemove, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE, AURA_EFFECT_HANDLE_REAL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void OnRemove(AuraEffect const* aurEff, AuraEffectHandleModes  /*mode*/)
     {
-        return new spell_hor_shared_sufferingAuraScript();
+        if (GetTargetApplication()->GetRemoveMode() == AURA_REMOVE_BY_ENEMY_SPELL) // dispelled
+            if (Unit* caster = GetCaster())
+                if (Map* map = caster->FindMap())
+                    if (Aura* a = aurEff->GetBase())
+                    {
+                        uint32 count = 0;
+                        uint32 ticks = 0;
+                        uint32 dmgPerTick = a->GetSpellInfo()->Effects[0].BasePoints;
+                        Map::PlayerList const& pl = map->GetPlayers();
+                        for (Map::PlayerList::const_iterator itr = pl.begin(); itr != pl.end(); ++itr)
+                            if (Player* p = itr->GetSource())
+                                if (p->IsAlive())
+                                    ++count;
+                        ticks = (a->GetDuration() / int32(a->GetSpellInfo()->Effects[0].Amplitude)) + 1;
+                        int32 dmg = (ticks * dmgPerTick) / count;
+                        caster->CastCustomSpell(GetTarget(), SPELL_SHARED_SUFFERING_DAMAGE, nullptr, &dmg, nullptr, true);
+                    }
+    }
+
+    void Register() override
+    {
+        AfterEffectRemove += AuraEffectRemoveFn(spell_hor_shared_suffering_aura::OnRemove, EFFECT_0, SPELL_AURA_PERIODIC_DAMAGE, AURA_EFFECT_HANDLE_REAL);
     }
 };
 
 void AddSC_boss_marwyn()
 {
     new boss_marwyn();
-    new spell_hor_shared_suffering();
+    RegisterSpellScript(spell_hor_shared_suffering_aura);
 }

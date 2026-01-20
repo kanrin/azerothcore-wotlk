@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -16,9 +16,9 @@
  */
 
 #include "CreatureGroups.h"
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "TaskScheduler.h"
 #include "ruins_of_ahnqiraj.h"
 
@@ -67,7 +67,7 @@ std::array<uint32, 8> RajaxxWavesData[] =
 class instance_ruins_of_ahnqiraj : public InstanceMapScript
 {
 public:
-    instance_ruins_of_ahnqiraj() : InstanceMapScript("instance_ruins_of_ahnqiraj", 509) { }
+    instance_ruins_of_ahnqiraj() : InstanceMapScript("instance_ruins_of_ahnqiraj", MAP_RUINS_OF_AHN_QIRAJ) { }
 
     struct instance_ruins_of_ahnqiraj_InstanceMapScript : public InstanceScript
     {
@@ -82,11 +82,14 @@ public:
 
         void OnPlayerEnter(Player* player) override
         {
-            if (GetBossState(DATA_KURINNAXX) == DONE && GetBossState(DATA_RAJAXX) != DONE)
+            if (GetBossState(DATA_KURINNAXX) == DONE &&
+                GetBossState(DATA_RAJAXX) != DONE &&
+                _rajaxWaveCounter == 0 &&                       // if non-zero, encounter is in progress
+                !_andorovGUID)                                  // cleared if he is dead
             {
-                if (!_andorovGUID)
+                if (Creature* creature = player->SummonCreature(NPC_ANDOROV, -8538.177f, 1486.0956f, 32.39054f, 3.7638654f, TEMPSUMMON_CORPSE_DESPAWN, 0))
                 {
-                    player->SummonCreature(NPC_ANDOROV, -8538.177f, 1486.0956f, 32.39054f, 3.7638654f, TEMPSUMMON_CORPSE_DESPAWN, 600000000);
+                    creature->setActive(true);
                 }
             }
         }
@@ -208,6 +211,11 @@ public:
                                 break;
                         }
                     }
+                }
+
+                if (creature->GetEntry() == NPC_ANDOROV)
+                {
+                    _andorovGUID.Clear();
                 }
             }
         }

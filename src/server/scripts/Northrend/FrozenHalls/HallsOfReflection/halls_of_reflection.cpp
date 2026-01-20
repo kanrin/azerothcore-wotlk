@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -16,7 +16,15 @@
  */
 
 #include "halls_of_reflection.h"
+#include "AreaTriggerScript.h"
+#include "CreatureScript.h"
+#include "InstanceScript.h"
 #include "MotionMaster.h"
+#include "PassiveAI.h"
+#include "ScriptedCreature.h"
+#include "ScriptedGossip.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
 
 enum Events
 {
@@ -237,7 +245,7 @@ public:
 
         void DoAction(int32 actionId) override
         {
-            switch(actionId)
+            switch (actionId)
             {
                 case ACTION_START_INTRO:
                     events.ScheduleEvent(EVENT_START_INTRO, 0ms);
@@ -563,7 +571,7 @@ public:
                     pInstance->HandleGameObject(pInstance->GetGuidData(GO_ARTHAS_DOOR), true);
                     pLichKing->SetVisible(true);
 
-                    pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveMidlelThronePos, false);
+                    pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveMidlelThronePos, FORCED_MOVEMENT_NONE, 0.f, false);
 
                 }
 
@@ -610,7 +618,7 @@ public:
                     if (Creature* pLichKing = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_LICH_KING_EVENT)))
                     {
                         pLichKing->SetVisible(true);
-                        pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveThronePos, false);
+                        pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveThronePos, FORCED_MOVEMENT_NONE, 0.f, false);
                     }
                 events.ScheduleEvent(EVENT_INTRO_LK_2_1, 1s);
                 break;
@@ -650,7 +658,7 @@ public:
                     pLichKing->SendMovementFlagUpdate();
                     pLichKing->CastSpell(pLichKing, SPELL_FROSTMOURNE_EQUIP, false);
                     pInstance->HandleGameObject(pInstance->GetGuidData(GO_FROSTMOURNE), false);
-                    events.ScheduleEvent(EVENT_INTRO_LK_4_3, 1750);
+                    events.ScheduleEvent(EVENT_INTRO_LK_4_3, 1750ms);
                 }
                 events.ScheduleEvent(EVENT_INTRO_LK_5, 6s);
                 break;
@@ -701,7 +709,7 @@ public:
             case EVENT_INTRO_LK_5_2:
                 if (Creature* pLichKing = ObjectAccessor::GetCreature(*me, pInstance->GetGuidData(NPC_LICH_KING_EVENT)))
                 {
-                    pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveAwayPos, false);
+                    pLichKing->GetMotionMaster()->MovePoint(0, LichKingMoveAwayPos, FORCED_MOVEMENT_NONE, 0.f, false);
                 }
                 break;
 
@@ -755,11 +763,11 @@ public:
                 {
                     Talk(SAY_SYLVANAS_INTRO_END);
                     me->HandleEmoteCommand(EMOTE_ONESHOT_EXCLAMATION);
-                    me->GetMotionMaster()->MovePoint(0, LichKingMoveAwayPos, false);
+                    me->GetMotionMaster()->MovePoint(0, LichKingMoveAwayPos, FORCED_MOVEMENT_NONE, 0.f, false);
                 }
                 if (Creature* pLoralen = pInstance->instance->GetCreature(pInstance->GetGuidData(NPC_DARK_RANGER_LORALEN)))
                 {
-                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk1, false);
+                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk1, FORCED_MOVEMENT_NONE, 0.f, false);
                 }
                 events.ScheduleEvent(EVENT_INTRO_LK_10, 1s + 500ms);
                 break;
@@ -767,7 +775,7 @@ public:
             case EVENT_INTRO_LK_10:
                 if (Creature* pLoralen = pInstance->instance->GetCreature(pInstance->GetGuidData(NPC_DARK_RANGER_LORALEN)))
                 {
-                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk2, false);
+                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk2, FORCED_MOVEMENT_NONE, 0.f, false);
 
                 }
                 events.ScheduleEvent(EVENT_INTRO_LK_11, 2s);
@@ -776,7 +784,7 @@ public:
             case EVENT_INTRO_LK_11:
                 if (Creature* pLoralen = pInstance->instance->GetCreature(pInstance->GetGuidData(NPC_DARK_RANGER_LORALEN)))
                 {
-                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk3, false);
+                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLk3, FORCED_MOVEMENT_NONE, 0.f, false);
                 }
                 events.ScheduleEvent(EVENT_INTRO_LK_12, 5s + 500ms);
                 break;
@@ -788,7 +796,7 @@ public:
                 }
                 if (Creature* pLoralen = pInstance->instance->GetCreature(pInstance->GetGuidData(NPC_DARK_RANGER_LORALEN)))
                 {
-                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLkFinal, false);
+                    pLoralen->GetMotionMaster()->MovePoint(0, LoralenFollowLkFinal, FORCED_MOVEMENT_NONE, 0.f, false);
                 }
                 events.ScheduleEvent(EVENT_INTRO_LK_13, 2s);
                     break;
@@ -949,7 +957,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -1057,7 +1065,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -1145,7 +1153,7 @@ public:
 
             ScriptedAI::EnterEvadeMode(why);
             if (me->IsSummon())
-                me->ToTempSummon()->DespawnOrUnsummon(1);
+                me->ToTempSummon()->DespawnOrUnsummon(1ms);
         }
     };
 };
@@ -1211,7 +1219,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -1316,7 +1324,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -1410,7 +1418,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -1724,7 +1732,7 @@ public:
         {
 
             ++reqKillCount;
-            if (events.GetNextEventTime(EVENT_DECREASE_REQ_COUNT_BY_100))
+            if (events.HasTimeUntilEvent(EVENT_DECREASE_REQ_COUNT_BY_100))
                 events.RescheduleEvent(EVENT_DECREASE_REQ_COUNT_BY_100, 10s);
             summons.Summon(s);
             s->SetHomePosition(PathWaypoints[WP_STOP[currentWall + 1]]);
@@ -1759,7 +1767,7 @@ public:
             if (me->IsNonMeleeSpellCast(false, true, true))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case EVENT_LK_CHECK_COMBAT:
                     if (me->isActiveObject()) // during fight
@@ -1942,14 +1950,14 @@ public:
             currentStopPoint = 0;
             events.Reset();
         }
-        void DoAction(int32 actionId) override
 
+        void DoAction(int32 actionId) override
         {
-            switch(actionId)
+            switch (actionId)
             {
                 case ACTION_START_INTRO:
                     events.ScheduleEvent(EVENT_LK_SAY_AGGRO, 0ms);
-                    events.ScheduleEvent(EVENT_LK_BATTLE_1, 2s +500ms);
+                    events.ScheduleEvent(EVENT_LK_BATTLE_1, 2s + 500ms);
                     events.ScheduleEvent(EVENT_LK_BATTLE_2, 3s);
                     events.ScheduleEvent(me->GetEntry() == NPC_JAINA_PART2 ? EVENT_JAINA_IMMOBILIZE_LK : EVENT_SYLVANAS_IMMOBILIZE_JUMP, 9s);
                     break;
@@ -1981,7 +1989,7 @@ public:
             path.push_back(G3D::Vector3(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()));
             for (uint8 i = WP_STOP[currentStopPoint - 1] + (currentStopPoint == 1 ? 0 : 1); i <= WP_STOP[currentStopPoint]; ++i)
                 path.push_back(G3D::Vector3(PathWaypoints[i].GetPositionX(), PathWaypoints[i].GetPositionY(), PathWaypoints[i].GetPositionZ()));
-            me->GetMotionMaster()->MoveSplinePath(&path);
+            me->GetMotionMaster()->MoveSplinePath(&path, FORCED_MOVEMENT_RUN);
         }
 
         void MovementInform(uint32 type, uint32 /*id*/) override
@@ -1993,7 +2001,7 @@ public:
         void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case EVENT_LK_SAY_AGGRO:
                     if (Creature* lkboss = pInstance->instance->GetCreature(pInstance->GetGuidData(NPC_LICH_KING_BOSS)))
@@ -2144,7 +2152,7 @@ public:
             if (!UpdateVictim())
                 return;
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             if (!leaped)
@@ -2203,7 +2211,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -2272,7 +2280,7 @@ public:
 
             events.Update(diff);
 
-            if (me->HasUnitState(UNIT_STATE_CASTING) || me->isFeared() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
+            if (me->HasUnitState(UNIT_STATE_CASTING) || me->HasFearAura() || me->IsCharmed() || me->isFrozen() || me->HasUnitState(UNIT_STATE_STUNNED) || me->HasUnitState(UNIT_STATE_CONFUSED))
                 return;
 
             switch (events.ExecuteEvent())
@@ -2312,34 +2320,33 @@ public:
     }
 };
 
-class spell_hor_gunship_cannon_fire : public SpellScriptLoader
+enum GunshipCannonFire
 {
-public:
-    spell_hor_gunship_cannon_fire() : SpellScriptLoader("spell_hor_gunship_cannon_fire") { }
+    SPELL_GUNSHIP_CANNON_FIRE = 70021
+};
 
-    class spell_hor_gunship_cannon_fireAuraScript : public AuraScript
+class spell_hor_gunship_cannon_fire_aura : public AuraScript
+{
+    PrepareAuraScript(spell_hor_gunship_cannon_fire_aura);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_hor_gunship_cannon_fireAuraScript)
+        return ValidateSpellInfo({ SPELL_GUNSHIP_CANNON_FIRE });
+    }
 
-        void HandleEffectPeriodic(AuraEffect const*   /*aurEff*/)
-        {
-            PreventDefaultAction();
-            if (Unit* caster = GetCaster())
-                if (Creature* c = caster->SummonCreature(WORLD_TRIGGER, CannonFirePos[caster->GetEntry() == NPC_JAINA_PART2 ? 0 : 1][urand(0, 2)], TEMPSUMMON_TIMED_DESPAWN, 1))
-                {
-                    c->CastSpell((Unit*)nullptr, 70021, true);
-                }
-        }
-
-        void Register() override
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_hor_gunship_cannon_fireAuraScript::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_TRIGGER_SPELL);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void HandleEffectPeriodic(AuraEffect const*   /*aurEff*/)
     {
-        return new spell_hor_gunship_cannon_fireAuraScript();
+        PreventDefaultAction();
+        if (Unit* caster = GetCaster())
+            if (Creature* creature = caster->SummonCreature(WORLD_TRIGGER, CannonFirePos[caster->GetEntry() == NPC_JAINA_PART2 ? 0 : 1][urand(0, 2)], TEMPSUMMON_TIMED_DESPAWN, 1))
+            {
+                creature->CastSpell((Unit*)nullptr, SPELL_GUNSHIP_CANNON_FIRE, true);
+            }
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_hor_gunship_cannon_fire_aura::HandleEffectPeriodic, EFFECT_0, SPELL_AURA_PERIODIC_TRIGGER_SPELL);
     }
 };
 
@@ -2400,7 +2407,7 @@ void AddSC_halls_of_reflection()
     new npc_hor_raging_ghoul();
     new npc_hor_risen_witch_doctor();
     new npc_hor_lumbering_abomination();
-    new spell_hor_gunship_cannon_fire();
+    RegisterSpellScript(spell_hor_gunship_cannon_fire_aura);
 
     new at_hor_battered_hilt_start();
     new at_hor_battered_hilt_throw();

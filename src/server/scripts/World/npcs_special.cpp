@@ -1,23 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "AreaDefines.h"
 #include "CellImpl.h"
 #include "Chat.h"
 #include "CombatAI.h"
+#include "CreatureScript.h"
 #include "CreatureTextMgr.h"
 #include "GameEventMgr.h"
 #include "GameTime.h"
@@ -25,7 +27,6 @@
 #include "ObjectMgr.h"
 #include "PassiveAI.h"
 #include "Pet.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 #include "ScriptedGossip.h"
@@ -34,6 +35,8 @@
 #include "TaskScheduler.h"
 #include "WaypointMgr.h"
 #include "World.h"
+#include "WorldState.h"
+#include "WorldStateDefines.h"
 
 /// @todo: this import is not necessary for compilation and marked as unused by the IDE
 //  however, for some reasons removing it would cause a damn linking issue
@@ -65,7 +68,7 @@ public:
         npc_elder_clearwaterAI(Creature* c) : ScriptedAI(c)
         {
             events.Reset();
-            events.ScheduleEvent(EVENT_CLEARWATER_ANNOUNCE, 1000, 1, 0);
+            events.ScheduleEvent(EVENT_CLEARWATER_ANNOUNCE, 1s, 1, 0);
             finished = false;
             preWarning = false;
             startWarning = false;
@@ -123,7 +126,7 @@ public:
                             }
                         }
 
-                        events.RepeatEvent(1000);
+                        events.Repeat(1s);
                         break;
                     }
             }
@@ -186,17 +189,6 @@ public:
     }
 };
 
-/*
- * Stranglethorn Vale Fishing Extravaganza World States
- */
-enum FishingExtravaganzaWorldStates
-{
-    STV_FISHING_PREV_WIN_TIME           = 197,
-    STV_FISHING_HAS_WINNER              = 198,
-    STV_FISHING_ANNOUNCE_EVENT_BEGIN    = 199,
-    STV_FISHING_ANNOUNCE_POOLS_DESPAN   = 200
-};
-
 enum RiggleBassbait
 {
     RIGGLE_SAY_START            = 0,
@@ -222,13 +214,13 @@ public:
         npc_riggle_bassbaitAI(Creature* c) : ScriptedAI(c)
         {
             m_uiTimer = 0;
-            auto prevWinTime = sWorld->getWorldState(STV_FISHING_PREV_WIN_TIME);
+            auto prevWinTime = sWorldState->getWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_PREV_WIN_TIME);
             if (GameTime::GetGameTime().count() - prevWinTime > DAY)
             {
                 // reset all after 1 day
-                sWorld->setWorldState(STV_FISHING_ANNOUNCE_EVENT_BEGIN, 1);
-                sWorld->setWorldState(STV_FISHING_ANNOUNCE_POOLS_DESPAN, 0);
-                sWorld->setWorldState(STV_FISHING_HAS_WINNER, 0);
+                sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_EVENT_BEGIN, 1);
+                sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_POOLS_DESPAWN, 0);
+                sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_HAS_WINNER, 0);
             }
         }
 
@@ -236,16 +228,16 @@ public:
 
         void CheckTournamentState() const
         {
-            if (sGameEventMgr->IsActiveEvent(EVENT_FISHING_TURN_INS) && !sWorld->getWorldState(STV_FISHING_HAS_WINNER))
+            if (sGameEventMgr->IsActiveEvent(EVENT_FISHING_TURN_INS) && !sWorldState->getWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_HAS_WINNER))
             {
                 if (!me->IsQuestGiver())
                 {
                     me->SetNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
                 }
-                if (sWorld->getWorldState(STV_FISHING_ANNOUNCE_EVENT_BEGIN))
+                if (sWorldState->getWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_EVENT_BEGIN))
                 {
                     me->AI()->Talk(RIGGLE_SAY_START);
-                    sWorld->setWorldState(STV_FISHING_ANNOUNCE_EVENT_BEGIN, 0);
+                    sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_EVENT_BEGIN, 0);
                 }
             }
             else
@@ -258,14 +250,14 @@ public:
             if (sGameEventMgr->IsActiveEvent(EVENT_FISHING_POOLS))
             {
                 // enable announcement: when pools despawn
-                sWorld->setWorldState(STV_FISHING_ANNOUNCE_POOLS_DESPAN, 1);
+                sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_POOLS_DESPAWN, 1);
             }
             else
             {
-                if (sWorld->getWorldState(STV_FISHING_ANNOUNCE_POOLS_DESPAN))
+                if (sWorldState->getWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_POOLS_DESPAWN))
                 {
                     me->AI()->Talk(RIGGLE_SAY_POOLS_END);
-                    sWorld->setWorldState(STV_FISHING_ANNOUNCE_POOLS_DESPAN, 0);
+                    sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_ANNOUNCE_POOLS_DESPAWN, 0);
                 }
             }
         }
@@ -291,7 +283,7 @@ public:
             player->PrepareQuestMenu(creature->GetGUID());
         }
 
-        if (sWorld->getWorldState(STV_FISHING_HAS_WINNER))
+        if (sWorldState->getWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_HAS_WINNER))
         {
             SendGossipMenuFor(player, GOSSIP_EVENT_OVER, creature->GetGUID());
         }
@@ -308,8 +300,8 @@ public:
         {
             creature->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
             creature->AI()->Talk(RIGGLE_SAY_WINNER, player);
-            sWorld->setWorldState(STV_FISHING_PREV_WIN_TIME, GameTime::GetGameTime().count());
-            sWorld->setWorldState(STV_FISHING_HAS_WINNER, 1);
+            sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_PREV_WIN_TIME, GameTime::GetGameTime().count());
+            sWorldState->setWorldState(WORLD_STATE_STRANGLETHORN_VALE_FISHING_HAS_WINNER, 1);
         }
         return true;
     }
@@ -334,7 +326,7 @@ public:
     {
         npc_training_dummyAI(Creature* creature) : ScriptedAI(creature)
         {
-            SetCombatMovement(false);
+            me->SetCombatMovement(false);
             me->ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK, true); //imune to knock aways like blast wave
         }
 
@@ -392,7 +384,7 @@ public:
     {
         npc_target_dummyAI(Creature* creature) : ScriptedAI(creature)
         {
-            SetCombatMovement(false);
+            me->SetCombatMovement(false);
             deathTimer = 15000;
             me->ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK, true); //imune to knock aways like blast wave
         }
@@ -439,7 +431,6 @@ public:
     }
 };
 
-// Theirs
 /*########
 # npc_air_force_bots
 #########*/
@@ -1006,7 +997,7 @@ public:
                             {
                                 if (guid != savedPatient->GetGUID()) // Don't kill the last guy we just saved
                                     if (Creature* patient = ObjectAccessor::GetCreature(*me, guid))
-                                        patient->setDeathState(JUST_DIED);
+                                        patient->setDeathState(DeathState::JustDied);
                             }
                         }
 
@@ -1155,7 +1146,7 @@ public:
             {
                 me->RemoveUnitFlag(UNIT_FLAG_IN_COMBAT);
                 me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-                me->setDeathState(JUST_DIED);
+                me->setDeathState(DeathState::JustDied);
                 me->SetDynamicFlag(32);
 
                 if (DoctorGUID)
@@ -1426,7 +1417,8 @@ public:
                                 break;
                         }
 
-                        Start(false, true);
+                        me->SetWalk(true);
+                        Start(false);
                     }
                     else
                         EnterEvadeMode();                       //something went wrong
@@ -2114,7 +2106,6 @@ enum Fireworks
     SPELL_LUNAR_FORTUNE     = 26522,
 
     ANIM_GO_LAUNCH_FIREWORK = 3,
-    ZONE_MOONGLADE          = 493,
 };
 
 Position omenSummonPos = {7558.993f, -2839.999f, 450.0214f, 4.46f};
@@ -2301,7 +2292,7 @@ public:
             if (isCluster())
             {
                 // Check if we are near Elune'ara lake south, if so try to summon Omen or a minion
-                if (me->GetZoneId() == ZONE_MOONGLADE)
+                if (me->GetZoneId() == AREA_MOONGLADE)
                 {
                     if (!me->FindNearestCreature(NPC_OMEN, 100.0f, false) && me->GetDistance2d(omenSummonPos.GetPositionX(), omenSummonPos.GetPositionY()) <= 100.0f)
                     {
@@ -2534,7 +2525,7 @@ public:
 
         void IsSummonedBy(WorldObject* summoner) override
         {
-            if (summoner->GetTypeId() != TYPEID_PLAYER)
+            if (!summoner->IsPlayer())
             {
                 return;
             }
@@ -2602,6 +2593,17 @@ public:
         events.Reset();
     }
 
+    bool CanAIAttack(Unit const* target) const override
+    {
+        if (Unit* summoner = me->GetCharmerOrOwner())
+        {
+            if (target->IsPlayer() && (!summoner->IsPvP() || !target->IsPvP()))
+                return false;
+        }
+
+        return true;
+    }
+
     void JustEngagedWith(Unit* /*who*/) override
     {
         events.ScheduleEvent(EVENT_FLAME_BUFFET, 4s);
@@ -2610,12 +2612,9 @@ public:
 
     void IsSummonedBy(WorldObject* summoner) override
     {
-        if (summoner->GetTypeId() != TYPEID_UNIT)
-        {
-            return;
-        }
+        if (summoner->IsCreature() || summoner->IsPlayer())
+            me->GetMotionMaster()->MoveFollow(summoner->ToUnit(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
 
-        me->GetMotionMaster()->MoveFollow(summoner->ToUnit(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
     }
 
     void UpdateAI(uint32 diff) override
@@ -2680,16 +2679,67 @@ struct npc_controller : public PossessedAI
     }
 };
 
+enum TravelerMammothVendor
+{
+    SAY_DISMISS      = 0,
+};
+
+struct npc_traveler_mammoth_vendor : public ScriptedAI
+{
+    npc_traveler_mammoth_vendor(Creature* creature) : ScriptedAI(creature) { }
+
+    bool _hasEjected = false;
+    ObjectGuid _playerGuid;
+
+    void Reset() override
+    {
+        _hasEjected = false;
+        _playerGuid.Clear();
+
+        if (sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_INTERACTION_GROUP) && !me->GetMap()->IsBattlegroundOrArena())
+            me->SetFaction(FACTION_FRIENDLY);
+
+        me->m_Events.KillAllEvents(false);
+    }
+
+    void UpdateAI(uint32 /*diff*/) override
+    {
+        if (_playerGuid.IsEmpty() && me->GetVehicle())
+        {
+            _playerGuid = me->GetVehicleBase()->GetGUID();
+        }
+        if (!me->GetVehicle() && !_hasEjected)
+        {
+            _hasEjected = true;
+
+            me->m_Events.AddEventAtOffset([this] {
+                if (Unit* driver = ObjectAccessor::GetUnit(*me, _playerGuid))
+                    me->SetFacingToObject(driver);
+            }, 2500ms);
+
+            me->m_Events.AddEventAtOffset([this] {
+                me->RemoveNpcFlag(UNIT_NPC_FLAG_GOSSIP | UNIT_NPC_FLAG_VENDOR_MASK);
+            }, 3300ms);
+
+            me->m_Events.AddEventAtOffset([this] {
+                Talk(SAY_DISMISS);
+                me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
+            }, 4100ms);
+
+            me->m_Events.AddEventAtOffset([this] {
+                me->DespawnOrUnsummon();
+            }, 10200ms);
+        }
+    }
+};
+
 void AddSC_npcs_special()
 {
-    // Ours
     new npc_elder_clearwater();
     new npc_riggle_bassbait();
     new npc_target_dummy();
     new npc_training_dummy();
     new npc_venomhide_hatchling();
-
-    // Theirs
     new npc_air_force_bots();
     new npc_chicken_cluck();
     new npc_dancing_flames();
@@ -2709,4 +2759,5 @@ void AddSC_npcs_special()
     RegisterCreatureAI(npc_arcanite_dragonling);
     RegisterCreatureAI(npc_crashin_thrashin_robot);
     RegisterCreatureAI(npc_controller);
+    RegisterCreatureAI(npc_traveler_mammoth_vendor);
 }

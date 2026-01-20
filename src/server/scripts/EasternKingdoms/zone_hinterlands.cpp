@@ -1,33 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Hinterlands
-SD%Complete: 100
-SDComment: Quest support: 2742
-SDCategory: The Hinterlands
-EndScriptData */
-
-/* ContentData
-npc_rinji
-EndContentData */
-
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 
@@ -77,7 +66,7 @@ public:
         {
             _IsByOutrunner = false;
             spawnId = 0;
-            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_DISABLE_MOVE);
+            me->SetImmuneToAll(true);
         }
 
         void Reset() override
@@ -90,6 +79,7 @@ public:
         {
             _IsByOutrunner = false;
             spawnId = 0;
+            me->SetImmuneToAll(true);
 
             npc_escortAI::JustRespawned();
         }
@@ -136,13 +126,14 @@ public:
 
         void sQuestAccept(Player* player, Quest const* quest) override
         {
-            me->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_DISABLE_MOVE);
+            me->SetImmuneToAll(false);
             if (quest->GetQuestId() == QUEST_RINJI_TRAPPED)
             {
                 if (GameObject* go = me->FindNearestGameObject(GO_RINJI_CAGE, INTERACTION_DISTANCE))
                     go->UseDoorOrButton();
 
-                npc_escortAI::Start(false, false, player->GetGUID(), quest);
+                me->SetWalk(true);
+                Start(false, player->GetGUID(), quest);
             }
         }
 
@@ -166,7 +157,7 @@ public:
                 case 17:
                     Talk(SAY_RIN_COMPLETE, player);
                     player->GroupEventHappens(QUEST_RINJI_TRAPPED, me);
-                    SetRun();
+                    me->SetWalk(false);
                     postEventCount = 1;
                     break;
             }

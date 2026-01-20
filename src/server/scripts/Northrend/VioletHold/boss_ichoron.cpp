@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellInfo.h"
 #include "violet_hold.h"
@@ -53,22 +53,15 @@ enum eCreatures
 enum eSpells
 {
     SPELL_DRAINED                           = 59820,
-    SPELL_FRENZY_N                          = 54312,
-    SPELL_FRENZY_H                          = 59522,
+    SPELL_FRENZY                            = 54312,
     SPELL_PROTECTIVE_BUBBLE                 = 54306,
-    SPELL_WATER_BLAST_N                     = 54237,
-    SPELL_WATER_BLAST_H                     = 59520,
-    SPELL_WATER_BOLT_VOLLEY_N               = 54241,
-    SPELL_WATER_BOLT_VOLLEY_H               = 59521,
+    SPELL_WATER_BLAST                       = 54237,
+    SPELL_WATER_BOLT_VOLLEY                 = 54241,
 
     SPELL_SPLASH                            = 59516, // casted by globule upon death
     SPELL_WATER_GLOBULE                     = 54268, // casted when hit by visual
     SPELL_CREATE_GLOBULE_VISUAL             = 54260, // tar 25
 };
-
-#define SPELL_WATER_BLAST                   DUNGEON_MODE(SPELL_WATER_BLAST_N, SPELL_WATER_BLAST_H)
-#define SPELL_WATER_BOLT_VOLLEY             DUNGEON_MODE(SPELL_WATER_BOLT_VOLLEY_N, SPELL_WATER_BOLT_VOLLEY_H)
-#define SPELL_FRENZY                        DUNGEON_MODE(SPELL_FRENZY_N, SPELL_FRENZY_H)
 
 class boss_ichoron : public CreatureScript
 {
@@ -110,7 +103,7 @@ public:
             if (!me->IsAlive())
                 return;
 
-            switch(param)
+            switch (param)
             {
                 case ACTION_WATER_ELEMENT_HIT:
                     if (pInstance)
@@ -351,7 +344,7 @@ public:
                 if (Creature* pIchoron = pInstance->instance->GetCreature(pInstance->GetGuidData(DATA_ICHORON_GUID)))
                     if (pIchoron->AI())
                         pIchoron->AI()->DoAction(ACTION_WATER_ELEMENT_KILLED);
-            me->DespawnOrUnsummon(2500);
+            me->DespawnOrUnsummon(2500ms);
         }
 
         void AttackStart(Unit* /*who*/) override {}

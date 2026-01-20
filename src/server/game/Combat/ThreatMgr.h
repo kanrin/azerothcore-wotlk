@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,7 +18,6 @@
 #ifndef _THREATMANAGER
 #define _THREATMANAGER
 
-#include "Common.h"
 #include "IteratorPair.h"
 #include "ObjectGuid.h"
 #include "Reference.h"
@@ -286,6 +285,30 @@ private:
     uint32 iUpdateTimer;
     ThreatContainer iThreatContainer;
     ThreatContainer iThreatOfflineContainer;
+};
+
+//=================================================
+
+struct RedirectThreatInfo
+{
+    RedirectThreatInfo() = default;
+    ObjectGuid _targetGUID;
+    uint32 _threatPct{ 0 };
+
+    [[nodiscard]] ObjectGuid GetTargetGUID() const { return _targetGUID; }
+    [[nodiscard]] uint32 GetThreatPct() const { return _threatPct; }
+
+    void Set(ObjectGuid guid, uint32 pct)
+    {
+        _targetGUID = guid;
+        _threatPct = pct;
+    }
+
+    void ModifyThreatPct(int32 amount)
+    {
+        amount += _threatPct;
+        _threatPct = uint32(std::max(0, amount));
+    }
 };
 
 //=================================================

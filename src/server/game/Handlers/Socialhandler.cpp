@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -31,15 +31,11 @@ void WorldSession::HandleContactListOpcode(WorldPacket& recv_data)
     uint32 flags;
     recv_data >> flags;
 
-    LOG_DEBUG("network", "WORLD: Received CMSG_CONTACT_LIST - Unk: {}", flags);
-
     _player->GetSocial()->SendSocialList(_player, flags);
 }
 
 void WorldSession::HandleAddFriendOpcode(WorldPacket& recv_data)
 {
-    LOG_DEBUG("network", "WORLD: Received CMSG_ADD_FRIEND");
-
     std::string friendName = GetAcoreString(LANG_FRIEND_IGNORE_UNKNOWN);
     std::string friendNote;
 
@@ -48,8 +44,6 @@ void WorldSession::HandleAddFriendOpcode(WorldPacket& recv_data)
 
     if (!normalizePlayerName(friendName))
         return;
-
-    LOG_DEBUG("network", "WORLD: {} asked to add friend : '{}'", GetPlayer()->GetName(), friendName);
 
     ObjectGuid friendGuid = sCharacterCache->GetCharacterGuidByName(friendName);
     if (!friendGuid)
@@ -76,7 +70,7 @@ void WorldSession::HandleAddFriendOpcode(WorldPacket& recv_data)
             else
             {
                 Player* pFriend = ObjectAccessor::FindConnectedPlayer(friendGuid);
-                if (pFriend && pFriend->IsVisibleGloballyFor(GetPlayer()) && !AccountMgr::IsGMAccount(pFriend->GetSession()->GetSecurity()))
+                if (pFriend && pFriend->IsVisibleGloballyFor(GetPlayer()) && !pFriend->GetSession()->IsGMAccount())
                     friendResult = FRIEND_ADDED_ONLINE;
                 else
                     friendResult = FRIEND_ADDED_OFFLINE;

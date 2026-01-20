@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -24,7 +24,7 @@
 #include "GameObject.h"
 #include "Group.h"
 #include "Object.h"
-#include "ObjectGridLoader.h"
+#include "GridObjectLoader.h"
 #include "Optional.h"
 #include "Player.h"
 #include "Spell.h"
@@ -32,6 +32,8 @@
 #include "UpdateData.h"
 #include "WorldSession.h"
 #include <iostream>
+
+#include "SpellMgr.h"
 
 class Player;
 //class Map;
@@ -41,17 +43,18 @@ namespace Acore
     struct VisibleNotifier
     {
         Player& i_player;
-        GuidUnorderedSet vis_guids;
         std::vector<Unit*>& i_visibleNow;
         bool i_gobjOnly;
         UpdateData i_data;
 
         VisibleNotifier(Player& player, bool gobjOnly) :
-            i_player(player), vis_guids(player.m_clientGUIDs), i_visibleNow(player.m_newVisible), i_gobjOnly(gobjOnly)
+            i_player(player), i_visibleNow(player.m_newVisible), i_gobjOnly(gobjOnly)
         {
             i_visibleNow.clear();
         }
 
+        void Visit(GameObjectMapType&);
+        template<class T> void Visit(std::vector<T>& m);
         template<class T> void Visit(GridRefMgr<T>& m);
         void SendToSelf(void);
     };
@@ -69,10 +72,10 @@ namespace Acore
 
     struct PlayerRelocationNotifier : public VisibleNotifier
     {
-        PlayerRelocationNotifier(Player& player) : VisibleNotifier(player, false) { }
+        PlayerRelocationNotifier(Player& player): VisibleNotifier(player, false) { }
 
+        template<class T> void Visit(std::vector<T>& m) { VisibleNotifier::Visit(m); }
         template<class T> void Visit(GridRefMgr<T>& m) { VisibleNotifier::Visit(m); }
-        void Visit(CreatureMapType&);
         void Visit(PlayerMapType&);
     };
 
@@ -81,20 +84,6 @@ namespace Acore
         Creature& i_creature;
         CreatureRelocationNotifier(Creature& c) : i_creature(c) {}
         template<class T> void Visit(GridRefMgr<T>&) {}
-        void Visit(CreatureMapType&);
-        void Visit(PlayerMapType&);
-    };
-
-    struct DelayedUnitRelocation
-    {
-        Map& i_map;
-        Cell& cell;
-        CellCoord& p;
-        const float i_radius;
-        DelayedUnitRelocation(Cell& c, CellCoord& pair, Map& map, float radius) :
-            i_map(map), cell(c), p(pair), i_radius(radius) { }
-        template<class T> void Visit(GridRefMgr<T>&) { }
-        void Visit(CreatureMapType&);
         void Visit(PlayerMapType&);
     };
 
@@ -102,28 +91,9 @@ namespace Acore
     {
         Unit& i_unit;
         bool isCreature;
-        explicit AIRelocationNotifier(Unit& unit) : i_unit(unit), isCreature(unit.GetTypeId() == TYPEID_UNIT)  {}
+        explicit AIRelocationNotifier(Unit& unit) : i_unit(unit), isCreature(unit.IsCreature())  {}
         template<class T> void Visit(GridRefMgr<T>&) {}
         void Visit(CreatureMapType&);
-    };
-
-    struct GridUpdater
-    {
-        GridType& i_grid;
-        uint32 i_timeDiff;
-        GridUpdater(GridType& grid, uint32 diff) : i_grid(grid), i_timeDiff(diff) { }
-
-        template<class T> void updateObjects(GridRefMgr<T>& m)
-        {
-            for (typename GridRefMgr<T>::iterator iter = m.begin(); iter != m.end(); ++iter)
-                iter->GetSource()->Update(i_timeDiff);
-        }
-
-        void Visit(PlayerMapType& m) { updateObjects<Player>(m); }
-        void Visit(CreatureMapType& m) { updateObjects<Creature>(m); }
-        void Visit(GameObjectMapType& m) { updateObjects<GameObject>(m); }
-        void Visit(DynamicObjectMapType& m) { updateObjects<DynamicObject>(m); }
-        void Visit(CorpseMapType& m) { updateObjects<Corpse>(m); }
     };
 
     struct MessageDistDeliverer
@@ -134,12 +104,14 @@ namespace Acore
         float i_distSq;
         TeamId teamId;
         Player const* skipped_receiver;
-        MessageDistDeliverer(WorldObject const* src, WorldPacket const* msg, float dist, bool own_team_only = false, Player const* skipped = nullptr)
+        bool required3dDist;
+        MessageDistDeliverer(WorldObject const* src, WorldPacket const* msg, float dist, bool own_team_only = false, Player const* skipped = nullptr, bool req3dDist = false)
             : i_source(src), i_message(msg), i_phaseMask(src->GetPhaseMask()), i_distSq(dist * dist)
-            , teamId((own_team_only && src->GetTypeId() == TYPEID_PLAYER) ? src->ToPlayer()->GetTeamId() : TEAM_NEUTRAL)
-            , skipped_receiver(skipped)
+            , teamId((own_team_only && src->IsPlayer()) ? src->ToPlayer()->GetTeamId() : TEAM_NEUTRAL)
+            , skipped_receiver(skipped), required3dDist(req3dDist)
         {
         }
+        void Visit(VisiblePlayersMap const& m);
         void Visit(PlayerMapType& m);
         void Visit(CreatureMapType& m);
         void Visit(DynamicObjectMapType& m);
@@ -154,7 +126,7 @@ namespace Acore
             if (!player->HaveAtClient(i_source))
                 return;
 
-            player->GetSession()->SendPacket(i_message);
+            player->SendDirectMessage(i_message);
         }
     };
 
@@ -179,17 +151,8 @@ namespace Acore
             if (player == i_source || !player->HaveAtClient(i_source) || player->IsFriendlyTo(i_source))
                 return;
 
-            player->GetSession()->SendPacket(i_message);
+            player->SendDirectMessage(i_message);
         }
-    };
-
-    struct ObjectUpdater
-    {
-        uint32 i_timeDiff;
-        explicit ObjectUpdater(const uint32 diff) : i_timeDiff(diff) {}
-        template<class T> void Visit(GridRefMgr<T>& m);
-        void Visit(PlayerMapType&) {}
-        void Visit(CorpseMapType&) {}
     };
 
     // SEARCHERS & LIST SEARCHERS & WORKERS
@@ -849,7 +812,7 @@ namespace Acore
         bool operator()(Unit* u)
         {
             if (u->IsAlive() && u->IsInCombat() && !i_obj->IsHostileTo(u) && i_obj->IsWithinDistInMap(u, i_range) &&
-                    (u->isFeared() || u->IsCharmed() || u->isFrozen() || u->HasUnitState(UNIT_STATE_STUNNED) || u->HasUnitState(UNIT_STATE_CONFUSED)))
+                    (u->HasFearAura() || u->IsCharmed() || u->isFrozen() || u->HasUnitState(UNIT_STATE_STUNNED) || u->HasUnitState(UNIT_STATE_CONFUSED)))
             {
                 return true;
             }
@@ -866,8 +829,8 @@ namespace Acore
         FriendlyMissingBuffInRange(Unit const* obj, float range, uint32 spellid) : i_obj(obj), i_range(range)
         {
             i_spell = spellid;
-            if( SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellid) )
-                if( SpellInfo const* newSpell = sSpellMgr->GetSpellForDifficultyFromSpell(spell, const_cast<Unit*>(obj)) )
+            if (SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellid))
+                if (SpellInfo const* newSpell = sSpellMgr->GetSpellForDifficultyFromSpell(spell, const_cast<Unit*>(obj)))
                     i_spell = newSpell->Id;
         }
         bool operator()(Unit* u)
@@ -892,7 +855,7 @@ namespace Acore
         bool operator()(Unit* u)
         {
             if (u->IsAlive() && !u->IsCritter() && i_obj->IsWithinDistInMap(u, i_range) && !i_funit->IsFriendlyTo(u) &&
-                    (i_funit->GetTypeId() != TYPEID_UNIT || !i_funit->ToCreature()->IsAvoidingAOE())) // pussywizard
+                    (!i_funit->IsCreature() || !i_funit->ToCreature()->IsAvoidingAOE())) // pussywizard
                 return true;
             else
                 return false;
@@ -915,7 +878,7 @@ namespace Acore
             if (u->GetCreatureType() == CREATURE_TYPE_NON_COMBAT_PET)
                 return false;
 
-            if (u->GetTypeId() == TYPEID_UNIT && (u->ToCreature()->IsTotem() || u->ToCreature()->IsTrigger() || u->ToCreature()->IsAvoidingAOE())) // pussywizard: added IsAvoidingAOE()
+            if (u->IsCreature() && (u->ToCreature()->IsTotem() || u->ToCreature()->IsTrigger() || u->ToCreature()->IsAvoidingAOE())) // pussywizard: added IsAvoidingAOE()
                 return false;
 
             if (!u->isTargetableForAttack(false, i_funit))
@@ -946,7 +909,7 @@ namespace Acore
                 return false;
             }
 
-            if (u->GetTypeId() == TYPEID_UNIT && u->ToCreature()->IsTotem())
+            if (u->IsCreature() && u->ToCreature()->IsTotem())
             {
                 return false;
             }
@@ -958,7 +921,7 @@ namespace Acore
 
             uint32 losChecks = LINEOFSIGHT_ALL_CHECKS;
             Optional<float> collisionHeight = { };
-            if (i_obj->GetTypeId() == TYPEID_GAMEOBJECT)
+            if (i_obj->IsGameObject())
             {
                 losChecks &= ~LINEOFSIGHT_CHECK_GOBJECT_M2;
                 collisionHeight = i_owner->GetCollisionHeight();
@@ -1006,7 +969,7 @@ namespace Acore
         AnyFriendlyUnitInObjectRangeCheck(WorldObject const* obj, Unit const* funit, float range, bool playerOnly = false) : i_obj(obj), i_funit(funit), i_range(range), i_playerOnly(playerOnly) {}
         bool operator()(Unit* u)
         {
-            if (u->IsAlive() && i_obj->IsWithinDistInMap(u, i_range) && i_funit->IsFriendlyTo(u) && (!i_playerOnly || u->GetTypeId() == TYPEID_PLAYER))
+            if (u->IsAlive() && i_obj->IsWithinDistInMap(u, i_range) && i_funit->IsFriendlyTo(u) && (!i_playerOnly || u->IsPlayer()))
                 return true;
             else
                 return false;
@@ -1024,7 +987,7 @@ namespace Acore
         AnyFriendlyNotSelfUnitInObjectRangeCheck(WorldObject const* obj, Unit const* funit, float range, bool playerOnly = false) : i_obj(obj), i_funit(funit), i_range(range), i_playerOnly(playerOnly) {}
         bool operator()(Unit* u)
         {
-            if (u != i_obj && u->IsAlive() && i_obj->IsWithinDistInMap(u, i_range) && i_funit->IsFriendlyTo(u) && (!i_playerOnly || u->GetTypeId() == TYPEID_PLAYER))
+            if (u != i_obj && u->IsAlive() && i_obj->IsWithinDistInMap(u, i_range) && i_funit->IsFriendlyTo(u) && (!i_playerOnly || u->IsPlayer()))
                 return true;
             else
                 return false;
@@ -1111,8 +1074,8 @@ namespace Acore
             Unit const* owner = i_funit->GetOwner();
             if (owner)
                 check = owner;
-            i_targetForPlayer = (check->GetTypeId() == TYPEID_PLAYER);
-            if (i_obj->GetTypeId() == TYPEID_DYNAMICOBJECT)
+            i_targetForPlayer = (check->IsPlayer());
+            if (i_obj->IsDynamicObject())
                 _spellInfo = sSpellMgr->GetSpellInfo(((DynamicObject*)i_obj)->GetSpellId());
         }
         bool operator()(Unit* u)
@@ -1129,10 +1092,10 @@ namespace Acore
                 {
                     return false;
                 }
-
             }
 
-            if (i_funit->_IsValidAttackTarget(u, _spellInfo, i_obj->GetTypeId() == TYPEID_DYNAMICOBJECT ? i_obj : nullptr) && i_obj->IsWithinDistInMap(u, i_range))
+            if (i_funit->_IsValidAttackTarget(u, _spellInfo, i_obj->IsDynamicObject() ? i_obj : nullptr) && i_obj->IsWithinDistInMap(u, i_range,true,false, true))
+
                 return true;
 
             return false;
@@ -1193,7 +1156,11 @@ namespace Acore
                 return;
 
             if (u->AI())
+            {
+                u->SetNoCallForHelp(true); // avoid recursive call for help causing stack overflow
                 u->AI()->AttackStart(i_enemy);
+                u->SetNoCallForHelp(false);
+            }
         }
     private:
         Unit* const i_funit;
@@ -1224,13 +1191,13 @@ namespace Acore
         }
         bool operator()(Unit* u)
         {
-            if (!me->IsWithinDistInMap(u, m_range, true, false))
+            if (!me->IsWithinDistInMap(u, m_range, true, false, false))
                 return false;
 
             if (!me->IsValidAttackTarget(u))
                 return false;
 
-            if (i_playerOnly && u->GetTypeId() != TYPEID_PLAYER)
+            if (i_playerOnly && !u->IsPlayer())
                 return false;
 
             m_range = me->GetDistance(u);   // use found unit range as new range limit for next check
@@ -1250,7 +1217,7 @@ namespace Acore
         explicit NearestHostileUnitInAttackDistanceCheck(Creature const* creature, float dist) : me(creature), m_range(dist) {}
         bool operator()(Unit* u)
         {
-            if (!me->IsWithinDistInMap(u, m_range, true, false))
+            if (!me->IsWithinDistInMap(u, m_range, true, false, false))
                 return false;
 
             if (!me->CanStartAttack(u))
@@ -1484,6 +1451,24 @@ namespace Acore
         float m_fRange;
     };
 
+    class AllGameObjectsMatchingOneEntryInRange
+    {
+    public:
+        AllGameObjectsMatchingOneEntryInRange(WorldObject const* object, std::vector<uint32> entries, float maxRange) : m_pObject(object), m_uiEntries(entries), m_fRange(maxRange) {}
+        bool operator()(GameObject *go)
+        {
+            if (std::ranges::any_of( m_uiEntries, [go](uint32 entry) { return go->GetEntry() == entry; }) && m_pObject->IsWithinDist(go, m_fRange, false))
+                return true;
+
+            return false;
+        }
+
+    private:
+        WorldObject const* m_pObject;
+        std::vector<uint32> m_uiEntries;
+        float m_fRange;
+    };
+
     class AllCreaturesOfEntryInRange
     {
     public:
@@ -1502,6 +1487,24 @@ namespace Acore
         float m_fRange;
     };
 
+    class AllCreaturesMatchingOneEntryInRange
+    {
+    public:
+        AllCreaturesMatchingOneEntryInRange(WorldObject const* object, std::vector<uint32> entries, float maxRange) : m_pObject(object), m_uiEntries(entries), m_fRange(maxRange) {}
+        bool operator()(Unit* unit)
+        {
+            if (std::ranges::any_of(m_uiEntries, [unit](uint32 entry) { return unit->GetEntry() == entry; }) && m_pObject->IsWithinDist(unit, m_fRange, false))
+                return true;
+
+            return false;
+        }
+
+    private:
+        WorldObject const* m_pObject;
+        std::vector<uint32> m_uiEntries;
+        float m_fRange;
+    };
+
     class MostHPMissingGroupInRange
     {
     public:
@@ -1515,7 +1518,7 @@ namespace Acore
             }
 
             Player* player = nullptr;
-            if (u->GetTypeId() == TYPEID_PLAYER)
+            if (u->IsPlayer())
             {
                 player = u->ToPlayer();
             }
@@ -1737,7 +1740,7 @@ namespace Acore
 
         ~LocalizedPacketDo()
         {
-            for (size_t i = 0; i < i_data_cache.size(); ++i)
+            for (std::size_t i = 0; i < i_data_cache.size(); ++i)
                 delete i_data_cache[i];
         }
         void operator()(Player* p);
@@ -1757,8 +1760,8 @@ namespace Acore
 
         ~LocalizedPacketListDo()
         {
-            for (size_t i = 0; i < i_data_cache.size(); ++i)
-                for (size_t j = 0; j < i_data_cache[i].size(); ++j)
+            for (std::size_t i = 0; i < i_data_cache.size(); ++i)
+                for (std::size_t j = 0; j < i_data_cache[i].size(); ++j)
                     delete i_data_cache[i][j];
         }
         void operator()(Player* p);

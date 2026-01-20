@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -23,9 +23,6 @@
 
 namespace MMAP
 {
-    static char const* const MAP_FILE_NAME_FORMAT = "%s/mmaps/%03i.mmap";
-    static char const* const TILE_FILE_NAME_FORMAT = "%s/mmaps/%03i%02i%02i.mmtile";
-
     // ######################## MMapMgr ########################
     MMapMgr::~MMapMgr()
     {
@@ -85,7 +82,7 @@ namespace MMAP
         }
 
         // load and init dtNavMesh - read parameters from file
-        std::string fileName = Acore::StringFormat(MAP_FILE_NAME_FORMAT, sConfigMgr->GetOption<std::string>("DataDir", ".").c_str(), mapId);
+        std::string fileName = Acore::StringFormat(MAP_FILE_NAME_FORMAT, sConfigMgr->GetOption<std::string>("DataDir", "."), mapId);
 
         FILE* file = fopen(fileName.c_str(), "rb");
         if (!file)
@@ -146,7 +143,7 @@ namespace MMAP
         }
 
         // load this tile :: mmaps/MMMXXYY.mmtile
-        std::string fileName = Acore::StringFormat(TILE_FILE_NAME_FORMAT, sConfigMgr->GetOption<std::string>("DataDir", ".").c_str(), mapId, x, y);
+        std::string fileName = Acore::StringFormat(TILE_FILE_NAME_FORMAT, sConfigMgr->GetOption<std::string>("DataDir", "."), mapId, x, y);
         FILE* file = fopen(fileName.c_str(), "rb");
         if (!file)
         {
@@ -174,7 +171,7 @@ namespace MMAP
         unsigned char* data = (unsigned char*)dtAlloc(fileHeader.size, DT_ALLOC_PERM);
         ASSERT(data);
 
-        size_t result = fread(data, fileHeader.size, 1, file);
+        std::size_t result = fread(data, fileHeader.size, 1, file);
         if (!result)
         {
             LOG_ERROR("maps", "MMAP:loadMap: Bad header or data in mmap {:03}{:02}{:02}.mmtile", mapId, x, y);

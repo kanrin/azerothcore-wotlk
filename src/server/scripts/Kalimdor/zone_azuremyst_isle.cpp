@@ -1,46 +1,31 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Azuremyst_Isle
-SD%Complete: 75
-SDComment: Quest support: 9283, 9537, 9582, 9554, 9531, ? (special flight path, proper model for mount missing). Injured Draenei cosmetic only, 9582.
-SDCategory: Azuremyst Isle
-EndScriptData */
-
-/* ContentData
-npc_draenei_survivor
-npc_injured_draenei
-npc_magwin
-npc_geezle
-go_ravager_cage
-npc_death_ravager
-EndContentData */
-
 #include "Cell.h"
 #include "CellImpl.h"
+#include "CreatureScript.h"
+#include "GameObjectScript.h"
 #include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
-#include "ScriptedGossip.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "GridNotifiersImpl.h"
 
 /*######
 ## npc_draenei_survivor
@@ -93,7 +78,7 @@ public:
 
         void MoveInLineOfSight(Unit* who) override
         {
-            if (CanSayHelp && who->GetTypeId() == TYPEID_PLAYER && me->IsFriendlyTo(who) && me->IsWithinDistInMap(who, 25.0f))
+            if (CanSayHelp && who->IsPlayer() && me->IsFriendlyTo(who) && me->IsWithinDistInMap(who, 25.0f))
             {
                 //Random switch between 4 texts
                 Talk(SAY_HELP, who);
@@ -273,7 +258,7 @@ public:
                     case 28:
                         player->GroupEventHappens(QUEST_A_CRY_FOR_HELP, me);
                         _events.ScheduleEvent(EVENT_TALK_END, 2s);
-                        SetRun(true);
+                        me->SetWalk(false);
                         break;
                     case 29:
                         if (Creature* cowlen = me->FindNearestCreature(NPC_COWLEN, 50.0f, true))
@@ -304,7 +289,8 @@ public:
                     case EVENT_START_ESCORT:
                         if (Player* player = ObjectAccessor::GetPlayer(*me, _player))
                         {
-                            npc_escortAI::Start(true, false, player->GetGUID());
+                            me->SetWalk(true);
+                            Start(true, player->GetGUID());
                         }
                         _events.ScheduleEvent(EVENT_STAND, 2s);
                         break;
@@ -474,7 +460,7 @@ public:
                 return;
 
             if (Player* player = ObjectAccessor::GetPlayer(*me, _playerGUID))
-                player->KilledMonsterCredit(me->GetEntry(), me->GetGUID());
+                player->RewardPlayerAndGroupAtEvent(me->GetEntry(), player);
 
             _movementComplete = true;
             _events.ScheduleEvent(EVENT_DESPAWN, 3500ms);

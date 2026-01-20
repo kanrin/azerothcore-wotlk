@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -20,12 +20,14 @@
 #include "GroupMgr.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
+#include "Pet.h"
 #include "Player.h"
+#include "ScriptMgr.h"
 #include "World.h"
 #include "WorldSession.h"
-#include "Pet.h"
-#include "ScriptMgr.h"
-//#include "WorldStatePackets.h"
+#include "WorldSessionMgr.h"
+#include "WorldStateDefines.h"
+#include "WorldStatePackets.h"
 
 void ArenaScore::AppendToPacket(WorldPacket& data)
 {
@@ -146,16 +148,17 @@ void Arena::RemovePlayer(Player* /*player*/)
     CheckWinConditions();
 }
 
-void Arena::FillInitialWorldStates(WorldPacket& data)
+void Arena::FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet)
 {
-    data << uint32(ARENA_WORLD_STATE_ALIVE_PLAYERS_GREEN) << uint32(GetAlivePlayersCountByTeam(TEAM_HORDE));
-    data << uint32(ARENA_WORLD_STATE_ALIVE_PLAYERS_GOLD) << uint32(GetAlivePlayersCountByTeam(TEAM_ALLIANCE));
+    packet.Worldstates.reserve(2);
+    packet.Worldstates.emplace_back(WORLD_STATE_ARENA_ALIVE_PLAYERS_GREEN, GetAlivePlayersCountByTeam(TEAM_HORDE));
+    packet.Worldstates.emplace_back(WORLD_STATE_ARENA_ALIVE_PLAYERS_GOLD, GetAlivePlayersCountByTeam(TEAM_ALLIANCE));
 }
 
 void Arena::UpdateArenaWorldState()
 {
-    UpdateWorldState(ARENA_WORLD_STATE_ALIVE_PLAYERS_GREEN, GetAlivePlayersCountByTeam(TEAM_HORDE));
-    UpdateWorldState(ARENA_WORLD_STATE_ALIVE_PLAYERS_GOLD, GetAlivePlayersCountByTeam(TEAM_ALLIANCE));
+    UpdateWorldState(WORLD_STATE_ARENA_ALIVE_PLAYERS_GREEN, GetAlivePlayersCountByTeam(TEAM_HORDE));
+    UpdateWorldState(WORLD_STATE_ARENA_ALIVE_PLAYERS_GOLD, GetAlivePlayersCountByTeam(TEAM_ALLIANCE));
 }
 
 void Arena::HandleKillPlayer(Player* player, Player* killer)
@@ -192,6 +195,9 @@ void Arena::RemovePlayerAtLeave(Player* player)
 
 void Arena::CheckWinConditions()
 {
+    if (!sScriptMgr->OnBeforeArenaCheckWinConditions(this))
+        return;
+
     if (!GetAlivePlayersCountByTeam(TEAM_ALLIANCE) && GetPlayersCountByTeam(TEAM_HORDE))
         EndBattleground(TEAM_HORDE);
     else if (GetPlayersCountByTeam(TEAM_ALLIANCE) && !GetAlivePlayersCountByTeam(TEAM_HORDE))
@@ -221,7 +227,7 @@ void Arena::EndBattleground(TeamId winnerTeamId)
         {
             // pussywizard: arena logs in database
             uint32 fightId = sArenaTeamMgr->GetNextArenaLogId();
-            uint32 currOnline = sWorld->GetActiveSessionCount();
+            uint32 currOnline = sWorldSessionMgr->GetActiveSessionCount();
 
             CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
             CharacterDatabasePreparedStatement* stmt2 = CharacterDatabase.GetPreparedStatement(CHAR_INS_ARENA_LOG_FIGHT);
@@ -242,6 +248,7 @@ void Arena::EndBattleground(TeamId winnerTeamId)
             uint8 memberId = 0;
             for (auto const& [playerGuid, arenaLogEntryData] : ArenaLogEntries)
             {
+                auto const& score = PlayerScores.find(playerGuid.GetCounter());
                 stmt2 = CharacterDatabase.GetPreparedStatement(CHAR_INS_ARENA_LOG_MEMBERSTATS);
                 stmt2->SetData(0, fightId);
                 stmt2->SetData(1, ++memberId);
@@ -250,9 +257,18 @@ void Arena::EndBattleground(TeamId winnerTeamId)
                 stmt2->SetData(4, arenaLogEntryData.ArenaTeamId);
                 stmt2->SetData(5, arenaLogEntryData.Acc);
                 stmt2->SetData(6, arenaLogEntryData.IP);
-                stmt2->SetData(7, arenaLogEntryData.DamageDone);
-                stmt2->SetData(8, arenaLogEntryData.HealingDone);
-                stmt2->SetData(9, arenaLogEntryData.KillingBlows);
+                if (score != PlayerScores.end())
+                {
+                    stmt2->SetData(7, score->second->GetDamageDone());
+                    stmt2->SetData(8, score->second->GetHealingDone());
+                    stmt2->SetData(9, score->second->GetKillingBlows());
+                }
+                else
+                {
+                    stmt2->SetData(7, 0);
+                    stmt2->SetData(8, 0);
+                    stmt2->SetData(9, 0);
+                }
                 trans->Append(stmt2);
             }
 

@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -16,7 +16,8 @@
  */
 
 #include "CombatAI.h"
-#include "MoveSpline.h"
+#include "CreatureScript.h"
+#include "GameObjectScript.h"
 #include "MoveSplineInit.h"
 #include "Opcodes.h"
 #include "PassiveAI.h"
@@ -24,6 +25,7 @@
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "Vehicle.h"
 #include "eye_of_eternity.h"
 
@@ -55,10 +57,8 @@ enum MovementInformPoints
 enum MalygosSpells
 {
     SPELL_BERSERK                       = 64238,
-    SPELL_ARCANE_BREATH_N               = 56272,
-    SPELL_ARCANE_BREATH_H               = 60072,
-    SPELL_ARCANE_STORM_N                = 61693,
-    SPELL_ARCANE_STORM_H                = 61694,
+    SPELL_ARCANE_BREATH                 = 56272,
+    SPELL_ARCANE_STORM                  = 61693,
 
     SPELL_VORTEX_VISUAL                 = 55873,
     SPELL_VORTEX_CONTROL_VEHICLE        = 56263,
@@ -78,18 +78,13 @@ enum MalygosSpells
     SPELL_DESTROY_PLATFORM_VISUAL       = 59084,
 
     SPELL_ARCANE_PULSE                  = 57432,
-    SPELL_PH3_SURGE_OF_POWER_N          = 57407,
-    SPELL_PH3_SURGE_OF_POWER_H          = 60936,
+    SPELL_PH3_SURGE_OF_POWER            = 57407,
 
     SPELL_STATIC_FIELD_MAIN             = 57430,
     SPELL_STATIC_FIELD_SUMMON           = 57431,
     SPELL_STATIC_FIELD_AURA             = 57428,
     SPELL_STATIC_FIELD_DAMAGE           = 57429,
 };
-
-#define SPELL_ARCANE_BREATH             DUNGEON_MODE(SPELL_ARCANE_BREATH_N, SPELL_ARCANE_BREATH_H)
-#define SPELL_ARCANE_STORM              DUNGEON_MODE(SPELL_ARCANE_STORM_N, SPELL_ARCANE_STORM_H)
-#define SPELL_PH3_SURGE_OF_POWER        DUNGEON_MODE(SPELL_PH3_SURGE_OF_POWER_N, SPELL_PH3_SURGE_OF_POWER_H)
 
 enum MalygosEvents
 {
@@ -239,6 +234,8 @@ public:
             me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_PACIFIED);
             me->RemoveUnitFlag(UNIT_FLAG_DISABLE_MOVE);
 
+            me->SetAnimTier(AnimTier::Fly);
+
             if (pInstance)
             {
                 pInstance->SetData(DATA_ENCOUNTER_STATUS, NOT_STARTED);
@@ -282,12 +279,6 @@ public:
                     case MI_POINT_SURGE_OF_POWER_CENTER:
                         events.RescheduleEvent(EVENT_SURGE_OF_POWER_WARNING, 0ms, 1);
                         break;
-                }
-            }
-            else if (type == EFFECT_MOTION_TYPE)
-            {
-                switch (id)
-                {
                     case MI_POINT_INTRO_LAND:
                         me->SetDisableGravity(false);
                         events.RescheduleEvent(EVENT_START_FIGHT, 0ms, 1);
@@ -380,7 +371,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -406,7 +397,7 @@ public:
                     }
                 case EVENT_INTRO_LAND:
                     {
-                        me->GetMotionMaster()->MoveLand(MI_POINT_INTRO_LAND, me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ(), 7.0f);
+                        me->GetMotionMaster()->MovePoint(MI_POINT_INTRO_LAND, me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ(), FORCED_MOVEMENT_RUN, 0.f, 0.f, true, true, MOTION_SLOT_ACTIVE, AnimTier::Ground);
                         break;
                     }
                 case EVENT_START_FIGHT:
@@ -467,9 +458,9 @@ public:
                         me->GetMotionMaster()->MoveIdle();
                         me->StopMoving();
                         me->SetDisableGravity(true);
-                        me->GetMotionMaster()->MoveTakeoff(MI_POINT_VORTEX_TAKEOFF, me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ() + 20.0f, 7.0f);
+                        me->GetMotionMaster()->MovePoint(MI_POINT_VORTEX_TAKEOFF, me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ() + 20.0f, FORCED_MOVEMENT_RUN, 0.f, 0.f, true, true, MOTION_SLOT_ACTIVE, AnimTier::Fly);
 
-                        events.DelayEvents(25000, 1); // don't delay berserk (group 0)
+                        events.DelayEvents(25s, 1); // don't delay berserk (group 0)
                     }
                     break;
                 case EVENT_VORTEX_FLY_TO_CENTER:
@@ -519,23 +510,20 @@ public:
                                             }
                                             //pPlayer->ClearUnitState(UNIT_STATE_ONVEHICLE);
 
-                                            Movement::MoveSplineInit init(pPlayer);
+                                            Movement::MoveSplineInit init(pPlayer); // TODO: has to be removed and handled with vehicle exit and vehicle enter code
                                             init.MoveTo(CenterPos.GetPositionX(), CenterPos.GetPositionY(), CenterPos.GetPositionZ());
                                             init.SetFacing(pPlayer->GetOrientation());
                                             init.SetTransportExit();
                                             init.Launch();
 
                                             pPlayer->SetUnitMovementFlags(MOVEMENTFLAG_NONE);
-                                            pPlayer->SetDisableGravity(true, true);
-
-                                            sScriptMgr->AnticheatSetCanFlybyServer(pPlayer, true);
+                                            pPlayer->SetDisableGravity(true);
 
                                             WorldPacket data(SMSG_SPLINE_MOVE_UNROOT, 8);
                                             data << pPlayer->GetPackGUID();
                                             pPlayer->SendMessageToSet(&data, true);
 
                                             sScriptMgr->AnticheatSetUnderACKmount(pPlayer);
-                                            sScriptMgr->AnticheatSetSkipOnePacketForASH(pPlayer, true);
 
                                             pPlayer->SetGuidValue(PLAYER_FARSIGHT, vp->GetGUID());
                                             c->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
@@ -547,7 +535,7 @@ public:
                         break;
                     }
                 case EVENT_VORTEX_LAND_0:
-                    me->GetMotionMaster()->MoveLand(MI_POINT_VORTEX_LAND, CenterPos, 7.0f);
+                    me->GetMotionMaster()->MovePoint(MI_POINT_VORTEX_LAND, CenterPos, FORCED_MOVEMENT_RUN, 0.f, true, true, AnimTier::Ground);
 
                     break;
                 case EVENT_VORTEX_LAND_1:
@@ -581,7 +569,7 @@ public:
                         me->GetMotionMaster()->MoveIdle();
                         me->DisableSpline();
                         me->SetDisableGravity(true);
-                        me->GetMotionMaster()->MoveTakeoff(MI_POINT_CENTER_AIR_PH_2, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() + 32.0f, 7.0f);
+                        me->GetMotionMaster()->MovePoint(MI_POINT_CENTER_AIR_PH_2, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() + 32.0f, FORCED_MOVEMENT_RUN, 0.f, 0.f, true, true, MOTION_SLOT_ACTIVE, AnimTier::Fly);
                         events.RescheduleEvent(EVENT_START_PHASE_2_MOVE_TO_SIDE, 22s + 500ms, 1);
                         break;
                     }
@@ -673,7 +661,7 @@ public:
                 case EVENT_CHECK_TRASH_DEAD:
                     {
                         if (me->FindNearestCreature(NPC_SCION_OF_ETERNITY, 250.0f, true) || me->FindNearestCreature(NPC_NEXUS_LORD, 250.0f, true))
-                            events.RepeatEvent(3000);
+                            events.Repeat(3s);
                         else
                         {
                             me->SendMeleeAttackStop();
@@ -707,7 +695,7 @@ public:
                 case EVENT_MOVE_TO_PHASE_3_POSITION:
                     {
                         me->SendMeleeAttackStop(me->GetVictim());
-                        me->GetMotionMaster()->MoveTakeoff(MI_POINT_PH_3_FIGHT_POSITION, CenterPos.GetPositionX(), CenterPos.GetPositionY(), CenterPos.GetPositionZ() - 5.0f, me->GetSpeed(MOVE_RUN));
+                        me->GetMotionMaster()->MovePoint(MI_POINT_PH_3_FIGHT_POSITION, CenterPos.GetPositionX(), CenterPos.GetPositionY(), CenterPos.GetPositionZ() - 5.0f, FORCED_MOVEMENT_RUN, 0.f, 0.f, true, true, MOTION_SLOT_ACTIVE, AnimTier::Fly);
 
                         me->GetThreatMgr().ClearAllThreat(); // players on vehicle are unattackable -> leads to EnterEvadeMode() because target is not acceptable!
 
@@ -718,7 +706,6 @@ public:
                                 if (Player* pPlayer = i->GetSource())
                                 {
                                     sScriptMgr->AnticheatSetUnderACKmount(pPlayer);
-                                    sScriptMgr->AnticheatSetSkipOnePacketForASH(pPlayer, true);
 
                                     if (!pPlayer->IsAlive() || pPlayer->IsGameMaster())
                                         continue;
@@ -727,7 +714,7 @@ public:
                                     {
                                         c->SetFaction(pPlayer->GetFaction());
                                         //pPlayer->CastCustomSpell(60683, SPELLVALUE_BASE_POINT0, 1, c, true);
-                                        c->m_Events.AddEvent(new EoEDrakeEnterVehicleEvent(*c, pPlayer->GetGUID()), c->m_Events.CalculateTime(500));
+                                        c->m_Events.AddEventAtOffset(new EoEDrakeEnterVehicleEvent(*c, pPlayer->GetGUID()), 500ms);
                                         AttackStart(c);
                                     }
                                 }
@@ -799,14 +786,14 @@ public:
             if (!summon)
                 return;
             summons.Summon(summon);
-            switch(summon->GetEntry())
+            switch (summon->GetEntry())
             {
                 case NPC_ARCANE_OVERLOAD:
                     summon->CastSpell(summon, SPELL_ARCANE_OVERLOAD_DMG, true);
-                    summon->DespawnOrUnsummon(45000);
+                    summon->DespawnOrUnsummon(45s);
                     break;
                 case NPC_STATIC_FIELD:
-                    summon->DespawnOrUnsummon(20000);
+                    summon->DespawnOrUnsummon(20s);
                     break;
             }
         }
@@ -894,18 +881,17 @@ public:
 
         void PassengerBoarded(Unit* pass, int8  /*seat*/, bool apply) override
         {
-            if (pass && !apply && pass->GetTypeId() == TYPEID_PLAYER)
+            if (pass && !apply && pass->IsPlayer())
             {
                 Player* plr = pass->ToPlayer();
                 float speed = plr->GetDistance(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()) / (1.0f * 0.001f);
-                plr->MonsterMoveWithSpeed(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), speed);
+                plr->SetDisableGravity(false); // packet only would lead to issues elsewhere
+                plr->GetMotionMaster()->MoveCharge(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), speed);
                 plr->RemoveAura(SPELL_FREEZE_ANIM);
-                plr->SetDisableGravity(false, true);
                 plr->SetGuidValue(PLAYER_FARSIGHT, ObjectGuid::Empty);
 
                 sScriptMgr->AnticheatSetCanFlybyServer(plr, false);
                 sScriptMgr->AnticheatSetUnderACKmount(plr);
-                sScriptMgr->AnticheatSetSkipOnePacketForASH(plr, true);
             }
         }
 
@@ -942,11 +928,7 @@ public:
                             if (!bUpdatedFlying && timer)
                             {
                                 bUpdatedFlying = true;
-                                plr->SetDisableGravity(true, true);
-
-                                sScriptMgr->AnticheatSetCanFlybyServer(plr, true);
-                                sScriptMgr->AnticheatSetSkipOnePacketForASH(plr, true);
-                                sScriptMgr->AnticheatSetUnderACKmount(plr);
+                                plr->SetDisableGravity(true);
                             }
 
                             plr->SendMonsterMove(me->GetPositionX() + dist * cos(arcangle), me->GetPositionY() + dist * std::sin(arcangle), me->GetPositionZ(), VORTEX_DEFAULT_DIFF * 2, SPLINEFLAG_FLYING);
@@ -991,7 +973,7 @@ public:
 
         void DoAction(int32 param) override
         {
-            switch(param)
+            switch (param)
             {
                 case 1:
                     MoveTimer = 1;
@@ -1000,7 +982,7 @@ public:
                     MoveTimer = 0;
                     me->GetMotionMaster()->MoveIdle();
                     me->DisableSpline();
-                    me->MonsterMoveWithSpeed(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() + 0.05f, 7.0f);
+                    me->GetMotionMaster()->MovePoint(0, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() + 0.05f, FORCED_MOVEMENT_NONE, 7.0f);
                     break;
             }
         }
@@ -1015,12 +997,11 @@ public:
                     MoveTimer = 0;
                     me->GetMotionMaster()->MoveIdle();
                     me->DisableSpline();
-                    me->MonsterMoveWithSpeed(me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ(), 100.0f);
-                    me->SetPosition(me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ(), me->GetOrientation());
+                    me->GetMotionMaster()->MovePoint(0, me->GetPositionX(), me->GetPositionY(), CenterPos.GetPositionZ(), FORCED_MOVEMENT_NONE, 100.0f);
                     me->ReplaceAllUnitFlags(UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_DISABLE_MOVE);
                     me->RemoveAura(SPELL_POWER_SPARK_VISUAL);
                     me->CastSpell(me, SPELL_POWER_SPARK_GROUND_BUFF, true);
-                    me->DespawnOrUnsummon(60000);
+                    me->DespawnOrUnsummon(60s);
                 }
             }
         }
@@ -1125,7 +1106,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -1185,7 +1166,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -1223,8 +1204,9 @@ public:
             if (Vehicle* v = me->GetVehicle())
                 v->RemoveAllPassengers();
 
-            if (Player* player = killer->GetCharmerOrOwnerPlayerOrPlayerItself())
-                player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS, 1, 0, me);
+            if (killer)
+                if (Player* player = killer->GetCharmerOrOwnerPlayerOrPlayerItself())
+                    player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS, 1, 0, me);
         }
 
         void MoveInLineOfSight(Unit*  /*who*/) override {}
@@ -1260,7 +1242,7 @@ public:
                 return;
             if (apply)
             {
-                if (who->GetTypeId() == TYPEID_PLAYER)
+                if (who->IsPlayer())
                 {
                     who->ApplySpellImmune(0, IMMUNITY_ID, SPELL_ARCANE_OVERLOAD_DMG, true);
                     who->ApplySpellImmune(0, IMMUNITY_ID, SPELL_SURGE_OF_POWER_DMG, true);
@@ -1288,7 +1270,7 @@ public:
                 me->SetCanFly(false);
                 me->GetMotionMaster()->MoveLand(0, me->GetPositionX(), me->GetPositionY(), 267.24f, 10.0f);
 
-                if (who->GetTypeId() == TYPEID_PLAYER)
+                if (who->IsPlayer())
                 {
                     who->ApplySpellImmune(0, IMMUNITY_ID, SPELL_ARCANE_OVERLOAD_DMG, false);
                     who->ApplySpellImmune(0, IMMUNITY_ID, SPELL_SURGE_OF_POWER_DMG, false);
@@ -1323,12 +1305,12 @@ public:
 
         void DoAction(int32 param) override
         {
-            switch(param)
+            switch (param)
             {
                 case 1: // move to next point
                     if (Vehicle* v = me->GetVehicleKit())
                         if (Unit* pass = v->GetPassenger(0))
-                            switch(pass->GetEntry())
+                            switch (pass->GetEntry())
                             {
                                 case NPC_NEXUS_LORD:
                                     {
@@ -1359,7 +1341,7 @@ public:
         {
             events.Update(diff);
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -1399,7 +1381,7 @@ public:
         void UpdateAI(uint32 diff) override
         {
             events.Update(diff);
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -1458,17 +1440,17 @@ public:
                 me->SetDisableGravity(false);
                 me->SendMovementFlagUpdate();
             }
-            else if (pass && pass->GetTypeId() == TYPEID_PLAYER && me->IsAlive())
+            else if (pass && pass->IsPlayer() && me->IsAlive())
             {
                 me->SetDisplayId(11686); // prevents nasty falling animation at despawn
-                me->DespawnOrUnsummon(1);
+                me->DespawnOrUnsummon(1ms);
             }
         }
 
         void JustDied(Unit* /*killer*/) override
         {
             me->SetDisplayId(11686); // prevents nasty falling animation at despawn
-            me->DespawnOrUnsummon(1);
+            me->DespawnOrUnsummon(1ms);
         }
     };
 };
@@ -1490,59 +1472,48 @@ public:
     }
 };
 
-class spell_eoe_ph3_surge_of_power : public SpellScriptLoader
+class spell_eoe_ph3_surge_of_power : public SpellScript
 {
-public:
-    spell_eoe_ph3_surge_of_power() : SpellScriptLoader("spell_eoe_ph3_surge_of_power") { }
+    PrepareSpellScript(spell_eoe_ph3_surge_of_power);
 
-    class spell_eoe_ph3_surge_of_power_SpellScript : public SpellScript
+    ObjectGuid DrakeGUID[3];
+
+    bool Load() override
     {
-        PrepareSpellScript(spell_eoe_ph3_surge_of_power_SpellScript);
-
-        ObjectGuid DrakeGUID[3];
-
-        bool Load() override
-        {
-            if (Unit* caster = GetCaster())
-                if (Creature* c = caster->ToCreature())
-                {
-                    uint8 i = 0;
-                    std::list<Unit*> drakes;
-                    c->AI()->SelectTargetList(drakes, (c->GetMap()->GetSpawnMode() == 0 ? 1 : 3), SelectTargetMethod::Random, 0, 0.0f, false, true, 57403 /*only drakes have this aura*/);
-                    for (std::list<Unit*>::iterator itr = drakes.begin(); itr != drakes.end() && i < 3; ++itr)
-                    {
-                        DrakeGUID[i++] = (*itr)->GetGUID();
-                        if (Vehicle* v = (*itr)->GetVehicleKit())
-                            if (Unit* p = v->GetPassenger(0))
-                                if (Player* plr = p->ToPlayer())
-                                    c->AI()->Talk(EMOTE_SURGE_OF_POWER_WARNING_P3, plr);
-                    }
-                }
-
-            return true;
-        }
-
-        void FilterTargets(std::list<WorldObject*>& targets)
-        {
-            if (Unit* caster = GetCaster())
+        if (Unit* caster = GetCaster())
+            if (Creature* c = caster->ToCreature())
             {
-                targets.clear();
-                for (uint8 i = 0; i < 3; ++i)
-                    if (DrakeGUID[i])
-                        if (Unit* u = ObjectAccessor::GetUnit(*caster, DrakeGUID[i]))
-                            targets.push_back(u);
+                uint8 i = 0;
+                std::list<Unit*> drakes;
+                c->AI()->SelectTargetList(drakes, (c->GetMap()->GetSpawnMode() == 0 ? 1 : 3), SelectTargetMethod::Random, 0, 0.0f, false, true, 57403 /*only drakes have this aura*/);
+                for (std::list<Unit*>::iterator itr = drakes.begin(); itr != drakes.end() && i < 3; ++itr)
+                {
+                    DrakeGUID[i++] = (*itr)->GetGUID();
+                    if (Vehicle* v = (*itr)->GetVehicleKit())
+                        if (Unit* p = v->GetPassenger(0))
+                            if (Player* plr = p->ToPlayer())
+                                c->AI()->Talk(EMOTE_SURGE_OF_POWER_WARNING_P3, plr);
+                }
             }
-        }
 
-        void Register() override
-        {
-            OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_eoe_ph3_surge_of_power_SpellScript::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
-        }
-    };
+        return true;
+    }
 
-    SpellScript* GetSpellScript() const override
+    void FilterTargets(std::list<WorldObject*>& targets)
     {
-        return new spell_eoe_ph3_surge_of_power_SpellScript();
+        if (Unit* caster = GetCaster())
+        {
+            targets.clear();
+            for (uint8 i = 0; i < 3; ++i)
+                if (DrakeGUID[i])
+                    if (Unit* u = ObjectAccessor::GetUnit(*caster, DrakeGUID[i]))
+                        targets.push_back(u);
+        }
+    }
+
+    void Register() override
+    {
+        OnObjectAreaTargetSelect += SpellObjectAreaTargetSelectFn(spell_eoe_ph3_surge_of_power::FilterTargets, EFFECT_0, TARGET_UNIT_SRC_AREA_ENEMY);
     }
 };
 
@@ -1558,5 +1529,5 @@ void AddSC_boss_malygos()
     new npc_hover_disk();
     new npc_eoe_wyrmrest_skytalon();
 
-    new spell_eoe_ph3_surge_of_power();
+    RegisterSpellScript(spell_eoe_ph3_surge_of_power);
 }

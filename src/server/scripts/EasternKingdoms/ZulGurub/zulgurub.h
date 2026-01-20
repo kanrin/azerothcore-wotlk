@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -51,6 +51,7 @@ enum CreatureIds
     NPC_ZULIAN_PROWLER      = 15101, // Arlokk Event
     NPC_ZEALOT_LORKHAN      = 11347,
     NPC_ZEALOT_ZATH         = 11348,
+    NPC_PRIESTESS_JEKLIK    = 14517,
     NPC_PRIESTESS_MARLI     = 14510,
     NPC_SPAWN_OF_MARLI      = 15041,
     NPC_HIGH_PRIEST_THEKAL  = 14509,

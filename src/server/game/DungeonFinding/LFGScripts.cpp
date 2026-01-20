@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -29,9 +29,19 @@
 
 namespace lfg
 {
-    LFGPlayerScript::LFGPlayerScript() : PlayerScript("LFGPlayerScript") { }
+    LFGPlayerScript::LFGPlayerScript() :
+        PlayerScript("LFGPlayerScript",
+        {
+            PLAYERHOOK_ON_LEVEL_CHANGED,
+            PLAYERHOOK_ON_LOGOUT,
+            PLAYERHOOK_ON_LOGIN,
+            PLAYERHOOK_ON_BIND_TO_INSTANCE,
+            PLAYERHOOK_ON_MAP_CHANGED
+        })
+    {
+    }
 
-    void LFGPlayerScript::OnLevelChanged(Player* player, uint8 /*oldLevel*/)
+    void LFGPlayerScript::OnPlayerLevelChanged(Player* player, uint8 /*oldLevel*/)
     {
         if (!sLFGMgr->isOptionEnabled(LFG_OPTION_ENABLE_DUNGEON_FINDER | LFG_OPTION_ENABLE_RAID_BROWSER | LFG_OPTION_ENABLE_SEASONAL_BOSSES))
             return;
@@ -39,7 +49,7 @@ namespace lfg
         sLFGMgr->InitializeLockedDungeons(player, player->GetGroup());
     }
 
-    void LFGPlayerScript::OnLogout(Player* player)
+    void LFGPlayerScript::OnPlayerLogout(Player* player)
     {
         if (!sLFGMgr->isOptionEnabled(LFG_OPTION_ENABLE_DUNGEON_FINDER | LFG_OPTION_ENABLE_RAID_BROWSER | LFG_OPTION_ENABLE_SEASONAL_BOSSES))
             return;
@@ -59,7 +69,7 @@ namespace lfg
         sLFGMgr->LfrSearchRemove(player);
     }
 
-    void LFGPlayerScript::OnLogin(Player* player)
+    void LFGPlayerScript::OnPlayerLogin(Player* player)
     {
         if (!sLFGMgr->isOptionEnabled(LFG_OPTION_ENABLE_DUNGEON_FINDER | LFG_OPTION_ENABLE_RAID_BROWSER | LFG_OPTION_ENABLE_SEASONAL_BOSSES))
             return;
@@ -83,14 +93,14 @@ namespace lfg
         /// @todo - Restore LfgPlayerData and send proper status to player if it was in a group
     }
 
-    void LFGPlayerScript::OnBindToInstance(Player* player, Difficulty difficulty, uint32 mapId, bool /*permanent*/)
+    void LFGPlayerScript::OnPlayerBindToInstance(Player* player, Difficulty difficulty, uint32 mapId, bool /*permanent*/)
     {
         MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
         if (mapEntry->IsDungeon() && difficulty > DUNGEON_DIFFICULTY_NORMAL)
             sLFGMgr->InitializeLockedDungeons(player, player->GetGroup());
     }
 
-    void LFGPlayerScript::OnMapChanged(Player* player)
+    void LFGPlayerScript::OnPlayerMapChanged(Player* player)
     {
         Map const* map = player->GetMap();
 
@@ -106,7 +116,7 @@ namespace lfg
                 sLFGMgr->LeaveLfg(player->GetGUID());
                 sLFGMgr->LeaveAllLfgQueues(player->GetGUID(), true);
                 player->RemoveAurasDueToSpell(LFG_SPELL_LUCK_OF_THE_DRAW);
-                player->TeleportTo(player->m_homebindMapId, player->m_homebindX, player->m_homebindY, player->m_homebindZ, player->m_homebindO);
+                player->TeleportTo(player->m_homebindMapId, player->m_homebindX, player->m_homebindY, player->m_homebindZ, 0.0f);
                 LOG_DEBUG("lfg", "LFGPlayerScript::OnMapChanged, Player {} ({}) is in LFG dungeon map but does not have a valid group! Teleporting to homebind.",
                     player->GetName(), player->GetGUID().ToString());
                 return;
@@ -130,7 +140,15 @@ namespace lfg
         }
     }
 
-    LFGGroupScript::LFGGroupScript() : GroupScript("LFGGroupScript")
+    LFGGroupScript::LFGGroupScript() :
+        GroupScript("LFGGroupScript",
+        {
+            GROUPHOOK_ON_ADD_MEMBER,
+            GROUPHOOK_ON_REMOVE_MEMBER,
+            GROUPHOOK_ON_DISBAND,
+            GROUPHOOK_ON_CHANGE_LEADER,
+            GROUPHOOK_ON_INVITE_MEMBER
+        })
     {
     }
 
@@ -169,6 +187,7 @@ namespace lfg
 
         sLFGMgr->SetGroup(guid, gguid);
         sLFGMgr->AddPlayerToGroup(gguid, guid);
+        sLFGMgr->AddPlayerQueuedForRandomDungeonToGroup(gguid, guid);
 
         // pussywizard: after all necessary actions handle raid browser
         if (sLFGMgr->GetState(guid) == LFG_STATE_RAIDBROWSER)
@@ -228,7 +247,8 @@ namespace lfg
         {
             // xinef: fixed dungeon deserter
             if (method != GROUP_REMOVEMETHOD_KICK_LFG && state != LFG_STATE_FINISHED_DUNGEON &&
-                    player->HasAura(LFG_SPELL_DUNGEON_COOLDOWN) && players >= LFG_GROUP_KICK_VOTES_NEEDED)
+                    player->HasAura(LFG_SPELL_DUNGEON_COOLDOWN) && players >= LFG_GROUP_KICK_VOTES_NEEDED &&
+                    sWorld->getBoolConfig(CONFIG_LFG_CAST_DESERTER))
             {
                 player->AddAura(LFG_SPELL_DUNGEON_DESERTER, player);
             }
@@ -297,4 +317,9 @@ namespace lfg
         }
     }
 
+    void AddSC_LFGScripts()
+    {
+        new LFGPlayerScript();
+        new LFGGroupScript();
+    }
 } // namespace lfg

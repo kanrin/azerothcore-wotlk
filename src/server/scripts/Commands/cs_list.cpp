@@ -1,39 +1,30 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-Name: list_commandscript
-%Complete: 100
-Comment: All list related commands
-Category: commandscripts
-EndScriptData */
-
 #include "Chat.h"
+#include "CommandScript.h"
 #include "Creature.h"
 #include "DBCStores.h"
 #include "DatabaseEnv.h"
 #include "GameObject.h"
 #include "Language.h"
 #include "MapMgr.h"
-#include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Player.h"
-#include "Random.h"
-#include "ScriptMgr.h"
 #include "SpellAuraEffects.h"
 
 using namespace Acore::ChatCommands;
@@ -71,8 +62,7 @@ public:
         CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(creatureId);
         if (!cInfo)
         {
-            handler->PSendSysMessage(LANG_COMMAND_INVALIDCREATUREID, uint32(creatureId));
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_COMMAND_INVALIDCREATUREID, uint32(creatureId));
             return false;
         }
 
@@ -126,9 +116,9 @@ public:
                         for (std::unordered_multimap<uint32, Creature*>::const_iterator itr = creBounds.first; itr != creBounds.second;)
                         {
                             if (handler->GetSession())
-                                handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, guid, cInfo->Entry, guid, cInfo->Name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->IsAlive() ? "*" : " ");
+                                handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, guid, cInfo->Entry, guid, cInfo->Name, x, y, z, mapId, itr->second->GetGUID().ToString(), itr->second->IsAlive() ? "*" : " ");
                             else
-                                handler->PSendSysMessage(LANG_CREATURE_LIST_CONSOLE, guid, cInfo->Name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->IsAlive() ? "*" : " ");
+                                handler->PSendSysMessage(LANG_CREATURE_LIST_CONSOLE, guid, cInfo->Name, x, y, z, mapId, itr->second->GetGUID().ToString(), itr->second->IsAlive() ? "*" : " ");
                             ++itr;
                         }
                         liveFound = true;
@@ -138,9 +128,9 @@ public:
                 if (!liveFound)
                 {
                     if (handler->GetSession())
-                        handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, guid, cInfo->Entry, guid, cInfo->Name.c_str(), x, y, z, mapId, "", "");
+                        handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, guid, cInfo->Entry, guid, cInfo->Name, x, y, z, mapId, "", "");
                     else
-                        handler->PSendSysMessage(LANG_CREATURE_LIST_CONSOLE, guid, cInfo->Name.c_str(), x, y, z, mapId, "", "");
+                        handler->PSendSysMessage(LANG_CREATURE_LIST_CONSOLE, guid, cInfo->Name, x, y, z, mapId, "", "");
                 }
             }
             while (result->NextRow());
@@ -207,7 +197,7 @@ public:
                 else
                     itemPos = "";
 
-                handler->PSendSysMessage(LANG_ITEMLIST_SLOT, itemGuid, ownerName.c_str(), ownerGuid, ownerAccountId, itemPos);
+                handler->PSendSysMessage(LANG_ITEMLIST_SLOT, itemGuid, ownerName, ownerGuid, ownerAccountId, itemPos);
             }
             while (result->NextRow());
 
@@ -254,7 +244,7 @@ public:
 
                 char const* itemPos = "[in mail]";
 
-                handler->PSendSysMessage(LANG_ITEMLIST_MAIL, itemGuid, itemSenderName.c_str(), itemSender, itemSenderAccountId, itemReceiverName.c_str(), itemReceiver, itemReceiverAccount, itemPos);
+                handler->PSendSysMessage(LANG_ITEMLIST_MAIL, itemGuid, itemSenderName, itemSender, itemSenderAccountId, itemReceiverName, itemReceiver, itemReceiverAccount, itemPos);
             }
             while (result->NextRow());
 
@@ -298,7 +288,7 @@ public:
 
                 char const* itemPos = "[in auction]";
 
-                handler->PSendSysMessage(LANG_ITEMLIST_AUCTION, itemGuid, ownerName.c_str(), owner, ownerAccountId, itemPos);
+                handler->PSendSysMessage(LANG_ITEMLIST_AUCTION, itemGuid, ownerName, owner, ownerAccountId, itemPos);
             }
             while (result->NextRow());
         }
@@ -329,7 +319,7 @@ public:
 
                 char const* itemPos = "[in guild bank]";
 
-                handler->PSendSysMessage(LANG_ITEMLIST_GUILD, itemGuid, guildName.c_str(), guildGuid, itemPos);
+                handler->PSendSysMessage(LANG_ITEMLIST_GUILD, itemGuid, guildName, guildGuid, itemPos);
             }
             while (result->NextRow());
 
@@ -343,8 +333,7 @@ public:
 
         if (inventoryCount + mailCount + auctionCount + guildCount == 0)
         {
-            handler->SendSysMessage(LANG_COMMAND_NOITEMFOUND);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_COMMAND_NOITEMFOUND);
             return false;
         }
 
@@ -358,8 +347,7 @@ public:
         GameObjectTemplate const* gInfo = sObjectMgr->GetGameObjectTemplate(gameObjectId);
         if (!gInfo)
         {
-            handler->PSendSysMessage(LANG_COMMAND_LISTOBJINVALIDID, uint32(gameObjectId));
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_COMMAND_LISTOBJINVALIDID, uint32(gameObjectId));
             return false;
         }
 
@@ -414,9 +402,9 @@ public:
                         for (std::unordered_multimap<uint32, GameObject*>::const_iterator itr = goBounds.first; itr != goBounds.second;)
                         {
                             if (handler->GetSession())
-                                handler->PSendSysMessage(LANG_GO_LIST_CHAT, guid, entry, guid, gInfo->name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->isSpawned() ? "*" : " ");
+                                handler->PSendSysMessage(LANG_GO_LIST_CHAT, guid, entry, guid, gInfo->name, x, y, z, mapId, itr->second->GetGUID().ToString(), itr->second->isSpawned() ? "*" : " ");
                             else
-                                handler->PSendSysMessage(LANG_GO_LIST_CONSOLE, guid, gInfo->name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->isSpawned() ? "*" : " ");
+                                handler->PSendSysMessage(LANG_GO_LIST_CONSOLE, guid, gInfo->name, x, y, z, mapId, itr->second->GetGUID().ToString(), itr->second->isSpawned() ? "*" : " ");
                             ++itr;
                         }
                         liveFound = true;
@@ -426,9 +414,9 @@ public:
                 if (!liveFound)
                 {
                     if (handler->GetSession())
-                        handler->PSendSysMessage(LANG_GO_LIST_CHAT, guid, entry, guid, gInfo->name.c_str(), x, y, z, mapId, "", "");
+                        handler->PSendSysMessage(LANG_GO_LIST_CHAT, guid, entry, guid, gInfo->name, x, y, z, mapId, "", "");
                     else
-                        handler->PSendSysMessage(LANG_GO_LIST_CONSOLE, guid, gInfo->name.c_str(), x, y, z, mapId, "", "");
+                        handler->PSendSysMessage(LANG_GO_LIST_CONSOLE, guid, gInfo->name, x, y, z, mapId, "", "");
                 }
             }
             while (result->NextRow());
@@ -459,15 +447,14 @@ public:
         Unit* unit = handler->getSelectedUnit();
         if (!unit)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 
         wstrToLower(namePart);
 
-        char const* talentStr = handler->GetAcoreString(LANG_TALENT);
-        char const* passiveStr = handler->GetAcoreString(LANG_PASSIVE);
+        std::string talentStr = handler->GetAcoreString(LANG_TALENT);
+        std::string passiveStr = handler->GetAcoreString(LANG_PASSIVE);
 
         Unit::AuraApplicationMap const& auras = unit->GetAppliedAuras();
         handler->PSendSysMessage(LANG_COMMAND_TARGET_LISTAURAS, auras.size());
@@ -484,11 +471,11 @@ public:
             std::ostringstream ss_name;
             ss_name << "|cffffffff|Hspell:" << aura->GetId() << "|h[" << name << "]|h|r";
 
-            handler->PSendSysMessage(LANG_COMMAND_TARGET_AURADETAIL, aura->GetId(), (handler->GetSession() ? ss_name.str().c_str() : name),
+            handler->PSendSysMessage(LANG_COMMAND_TARGET_AURADETAIL, aura->GetId(), (handler->GetSession() ? ss_name.str() : name),
                                      aurApp->GetEffectMask(), aura->GetCharges(), aura->GetStackAmount(), aurApp->GetSlot(),
                                      aura->GetDuration(), aura->GetMaxDuration(), (aura->IsPassive() ? passiveStr : ""),
                                      (talent ? talentStr : ""), aura->GetCasterGUID().IsPlayer() ? "player" : "creature",
-                                     aura->GetCasterGUID().GetCounter());
+                                     aura->GetCasterGUID().ToString());
         }
 
         for (uint16 i = 0; i < TOTAL_AURAS; ++i)

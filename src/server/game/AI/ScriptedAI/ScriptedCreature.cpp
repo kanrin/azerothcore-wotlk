@@ -1,26 +1,27 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptedCreature.h"
 #include "Cell.h"
 #include "CellImpl.h"
+#include "Containers.h"
 #include "GameTime.h"
 #include "GridNotifiers.h"
 #include "ObjectMgr.h"
+#include "ScriptedCreature.h"
 #include "Spell.h"
 #include "TemporarySummon.h"
 
@@ -68,7 +69,7 @@ void SummonList::DespawnEntry(uint32 entry)
     }
 }
 
-void SummonList::DespawnAll(uint32 delay /*= 0*/)
+void SummonList::DespawnAll(Milliseconds delay /*= 0ms*/)
 {
     while (!storage_.empty())
     {
@@ -141,6 +142,23 @@ Creature* SummonList::GetCreatureWithEntry(uint32 entry) const
     return nullptr;
 }
 
+Creature* SummonList::GetRandomCreatureWithEntry(uint32 entry) const
+{
+    std::vector<ObjectGuid> candidates;
+    candidates.reserve(storage_.size());
+
+    for (auto const guid : storage_)
+        if (Creature* summon = ObjectAccessor::GetCreature(*me, guid))
+            if (summon->GetEntry() == entry)
+                candidates.push_back(guid);
+
+    if (candidates.empty())
+        return nullptr;
+
+    ObjectGuid randomGuid = Acore::Containers::SelectRandomContainerElement(candidates);
+    return ObjectAccessor::GetCreature(*me, randomGuid);
+}
+
 bool SummonList::IsAnyCreatureAlive() const
 {
     for (auto const& guid : storage_)
@@ -190,12 +208,12 @@ bool SummonList::IsAnyCreatureInCombat() const
 }
 
 ScriptedAI::ScriptedAI(Creature* creature) : CreatureAI(creature),
-    me(creature),
-    IsFleeing(false),
-    _isCombatMovementAllowed(true)
+    me(creature)
 {
     _isHeroic = me->GetMap()->IsHeroic();
     _difficulty = Difficulty(me->GetMap()->GetSpawnMode());
+    _invincible = false;
+    _canAutoAttack = true;
 }
 
 void ScriptedAI::AttackStartNoMove(Unit* who)
@@ -209,7 +227,7 @@ void ScriptedAI::AttackStartNoMove(Unit* who)
 
 void ScriptedAI::AttackStart(Unit* who)
 {
-    if (IsCombatMovementAllowed())
+    if (me->IsCombatMovementAllowed())
         CreatureAI::AttackStart(who);
     else
         AttackStartNoMove(who);
@@ -221,7 +239,14 @@ void ScriptedAI::UpdateAI(uint32 /*diff*/)
     if (!UpdateVictim())
         return;
 
-    DoMeleeAttackIfReady();
+    if (IsAutoAttackAllowed())
+        DoMeleeAttackIfReady();
+}
+
+void ScriptedAI::DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/)
+{
+    if (IsInvincible() && damage >= me->GetHealth())
+        damage = me->GetHealth() - 1;
 }
 
 void ScriptedAI::DoStartMovement(Unit* victim, float distance, float angle)
@@ -309,6 +334,29 @@ void ScriptedAI::DoPlayMusic(uint32 soundId, bool zone)
 Creature* ScriptedAI::DoSpawnCreature(uint32 entry, float offsetX, float offsetY, float offsetZ, float angle, uint32 type, uint32 despawntime)
 {
     return me->SummonCreature(entry, me->GetPositionX() + offsetX, me->GetPositionY() + offsetY, me->GetPositionZ() + offsetZ, angle, TempSummonType(type), despawntime);
+}
+
+void ScriptedAI::ScheduleTimedEvent(Milliseconds timerMin, Milliseconds timerMax, std::function<void()> exec, Milliseconds repeatMin, Milliseconds repeatMax, uint32 uniqueId)
+{
+    if (uniqueId && IsUniqueTimedEventDone(uniqueId))
+    {
+        return;
+    }
+
+    scheduler.Schedule(timerMin == 0ms ? timerMax : timerMin, timerMax, [exec, repeatMin, repeatMax, uniqueId](TaskContext context)
+    {
+        exec();
+
+        if (!uniqueId)
+        {
+            repeatMax > 0ms ? context.Repeat(repeatMin, repeatMax) : context.Repeat(repeatMin);
+        }
+    });
+
+    if (uniqueId)
+    {
+        SetUniqueTimedEventDone(uniqueId);
+    }
 }
 
 SpellInfo const* ScriptedAI::SelectSpell(Unit* target, uint32 school, uint32 mechanic, SelectTargetType targets, uint32 powerCostMin, uint32 powerCostMax, float rangeMin, float rangeMax, SelectEffect effects)
@@ -461,7 +509,7 @@ Unit* ScriptedAI::DoSelectLowestHpFriendly(float range, uint32 minHPDiff)
     Unit* unit = nullptr;
     Acore::MostHPMissingInRange u_check(me, range, minHPDiff);
     Acore::UnitLastSearcher<Acore::MostHPMissingInRange> searcher(me, unit, u_check);
-    Cell::VisitAllObjects(me, searcher, range);
+    Cell::VisitObjects(me, searcher, range);
 
     return unit;
 }
@@ -471,7 +519,7 @@ std::list<Creature*> ScriptedAI::DoFindFriendlyCC(float range)
     std::list<Creature*> list;
     Acore::FriendlyCCedInRange u_check(me, range);
     Acore::CreatureListSearcher<Acore::FriendlyCCedInRange> searcher(me, list, u_check);
-    Cell::VisitAllObjects(me, searcher, range);
+    Cell::VisitObjects(me, searcher, range);
     return list;
 }
 
@@ -480,7 +528,7 @@ std::list<Creature*> ScriptedAI::DoFindFriendlyMissingBuff(float range, uint32 u
     std::list<Creature*> list;
     Acore::FriendlyMissingBuffInRange u_check(me, range, uiSpellid);
     Acore::CreatureListSearcher<Acore::FriendlyMissingBuffInRange> searcher(me, list, u_check);
-    Cell::VisitAllObjects(me, searcher, range);
+    Cell::VisitObjects(me, searcher, range);
     return list;
 }
 
@@ -491,7 +539,7 @@ Player* ScriptedAI::GetPlayerAtMinimumRange(float minimumRange)
     Acore::PlayerAtMinimumRangeAway check(me, minimumRange);
     Acore::PlayerSearcher<Acore::PlayerAtMinimumRangeAway> searcher(me, player, check);
 
-    Cell::VisitWorldObjects(me, searcher, minimumRange);
+    Cell::VisitObjects(me, searcher, minimumRange);
 
     return player;
 }
@@ -505,18 +553,21 @@ void ScriptedAI::SetEquipmentSlots(bool loadDefault, int32 mainHand /*= EQUIP_NO
     }
 
     if (mainHand >= 0)
-        me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 0, uint32(mainHand));
+    {
+        me->SetVirtualItem(0, uint32(mainHand));
+        me->UpdateDamagePhysical(BASE_ATTACK);
+    }
 
     if (offHand >= 0)
-        me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 1, uint32(offHand));
+    {
+        me->SetVirtualItem(1, uint32(offHand));
+    }
 
     if (ranged >= 0)
-        me->SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + 2, uint32(ranged));
-}
-
-void ScriptedAI::SetCombatMovement(bool allowMovement)
-{
-    _isCombatMovementAllowed = allowMovement;
+    {
+        me->SetVirtualItem(2, uint32(ranged));
+        me->UpdateDamagePhysical(RANGED_ATTACK);
+    }
 }
 
 enum eNPCs
@@ -533,7 +584,7 @@ Player* ScriptedAI::SelectTargetFromPlayerList(float maxdist, uint32 excludeAura
     std::vector<Player*> tList;
     for(Map::PlayerList::const_iterator itr = pList.begin(); itr != pList.end(); ++itr)
     {
-        if (!me->IsWithinDistInMap(itr->GetSource(), maxdist, true, false) || !itr->GetSource()->IsAlive() || itr->GetSource()->IsGameMaster())
+        if (!me->IsWithinDistInMap(itr->GetSource(), maxdist, true, false, false) || !itr->GetSource()->IsAlive() || itr->GetSource()->IsGameMaster())
             continue;
         if (excludeAura && itr->GetSource()->HasAura(excludeAura))
             continue;
@@ -552,10 +603,19 @@ Player* ScriptedAI::SelectTargetFromPlayerList(float maxdist, uint32 excludeAura
 BossAI::BossAI(Creature* creature, uint32 bossId) : ScriptedAI(creature),
     instance(creature->GetInstanceScript()),
     summons(creature),
-    _bossId(bossId)
+    _bossId(bossId),
+    _nextHealthCheck(0, { }, false)
 {
+    callForHelpRange = 0.0f;
     if (instance)
         SetBoundary(instance->GetBossBoundary(bossId));
+
+    // Prevents updating the scheduler's timer while the creature is casting.
+    // Clear it in the script if you need it to update while the creature is casting.
+    scheduler.SetValidator([this]
+    {
+        return !me->HasUnitState(UNIT_STATE_CASTING);
+    });
 }
 
 bool BossAI::CanRespawn()
@@ -576,11 +636,16 @@ void BossAI::_Reset()
     if (!me->IsAlive())
         return;
 
+    if (me->IsEngaged())
+        return;
+
     me->SetCombatPulseDelay(0);
     me->ResetLootMode();
     events.Reset();
     scheduler.CancelAll();
+    me->m_Events.KillAllEvents(false);
     summons.DespawnAll();
+    ClearUniqueTimedEventsDone();
     _healthCheckEvents.clear();
     if (instance)
         instance->SetBossState(_bossId, NOT_STARTED);
@@ -605,6 +670,13 @@ void BossAI::_JustEngagedWith()
     me->setActive(true);
     DoZoneInCombat();
     ScheduleTasks();
+    if (callForHelpRange)
+    {
+        ScheduleTimedEvent(0ms, [&]
+        {
+            me->CallForHelp(callForHelpRange);
+        }, 2s);
+    }
     if (instance)
     {
         // bosses do not respawn, check only on enter combat
@@ -617,6 +689,16 @@ void BossAI::_JustEngagedWith()
     }
 }
 
+void BossAI::_EnterEvadeMode(EvadeReason why)
+{
+    CreatureAI::EnterEvadeMode(why);
+    if (instance && instance->GetBossState(_bossId) != DONE)
+    {
+        instance->SetBossState(_bossId, NOT_STARTED);
+        instance->SaveToDB();
+    }
+}
+
 void BossAI::TeleportCheaters()
 {
     float x, y, z;
@@ -625,7 +707,7 @@ void BossAI::TeleportCheaters()
     ThreatContainer::StorageType threatList = me->GetThreatMgr().GetThreatList();
     for (ThreatContainer::StorageType::const_iterator itr = threatList.begin(); itr != threatList.end(); ++itr)
         if (Unit* target = (*itr)->getTarget())
-            if (target->GetTypeId() == TYPEID_PLAYER && !IsInBoundary(target))
+            if (target->IsPlayer() && !IsInBoundary(target))
                 target->NearTeleportTo(x, y, z, 0);
 }
 
@@ -670,17 +752,44 @@ void BossAI::UpdateAI(uint32 diff)
         }
     }
 
-    DoMeleeAttackIfReady();
+    if (IsAutoAttackAllowed())
+        DoMeleeAttackIfReady();
 }
 
-void BossAI::DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*damagetype*/, SpellSchoolMask /*damageSchoolMask*/)
+void BossAI::OnSpellCastFinished(SpellInfo const* spellInfo, SpellFinishReason reason)
 {
-    if (!_healthCheckEvents.empty())
+    ScriptedAI::OnSpellCastFinished(spellInfo, reason);
+    // Check if any health check events are pending (i.e. waiting for the boss to stop casting.
+    if (_nextHealthCheck.IsPending() && me->IsInCombat())
     {
-        _healthCheckEvents.remove_if([&](HealthCheckEventData data) -> bool
+        _nextHealthCheck.UpdateStatus(HEALTH_CHECK_PROCESSED);
+        // This must be delayed because creature might still have unit state casting at this point, which might break scripts.
+        scheduler.Schedule(1s, [this](TaskContext context)
         {
-            return _ProccessHealthCheckEvent(data._healthPct, damage, data._exec);
+            if (me->HasUnitState(UNIT_STATE_CASTING))
+                context.Repeat();
+            else
+                ProcessHealthCheck();
         });
+    }
+}
+
+void BossAI::DamageTaken(Unit* attacker, uint32& damage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask)
+{
+    ScriptedAI::DamageTaken(attacker, damage, damagetype, damageSchoolMask);
+
+    if (!_nextHealthCheck.HasBeenProcessed())
+    {
+        if (me->HealthBelowPctDamaged(_nextHealthCheck._healthPct, damage))
+        {
+            if (!_nextHealthCheck._allowedWhileCasting && me->HasUnitState(UNIT_STATE_CASTING))
+            {
+                _nextHealthCheck.UpdateStatus(HEALTH_CHECK_PENDING);
+                return;
+            }
+
+            ProcessHealthCheck();
+        }
     }
 }
 
@@ -689,29 +798,48 @@ void BossAI::DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*
  *
  * @param healthPct The health percent at which the code will be executed.
  * @param exec The fuction to be executed.
+ * @param allowedWhileCasting If false, the event will not be checked while the creature is casting.
  */
-void BossAI::ScheduleHealthCheckEvent(uint32 healthPct, std::function<void()> exec)
+void BossAI::ScheduleHealthCheckEvent(uint32 healthPct, std::function<void()> exec, bool allowedWhileCasting /*=true*/)
 {
-    _healthCheckEvents.push_back(HealthCheckEventData(healthPct, exec));
+    _healthCheckEvents.push_back(HealthCheckEventData(healthPct, exec, HEALTH_CHECK_SCHEDULED, allowedWhileCasting));
+    _nextHealthCheck = _healthCheckEvents.front();
 };
 
-void BossAI::ScheduleHealthCheckEvent(std::initializer_list<uint8> healthPct, std::function<void()> exec)
+void BossAI::ScheduleHealthCheckEvent(std::initializer_list<uint8> healthPct, std::function<void()> exec, bool allowedWhileCasting /*=true*/)
 {
     for (auto const& checks : healthPct)
-    {
-        _healthCheckEvents.push_back(HealthCheckEventData(checks, exec));
-    }
+        _healthCheckEvents.push_back(HealthCheckEventData(checks, exec, HEALTH_CHECK_SCHEDULED, allowedWhileCasting));
+
+    _nextHealthCheck = _healthCheckEvents.front();
 }
 
-bool BossAI::_ProccessHealthCheckEvent(uint8 healthPct, uint32 damage, std::function<void()> exec) const
+void BossAI::ProcessHealthCheck()
 {
-    if (me->HealthBelowPctDamaged(healthPct, damage))
-    {
-        exec();
-        return true;
-    }
+    _nextHealthCheck.UpdateStatus(HEALTH_CHECK_PROCESSED);
+    _nextHealthCheck._exec();
 
-    return false;
+    _healthCheckEvents.remove_if([&](HealthCheckEventData data) -> bool
+    {
+        return data._healthPct == _nextHealthCheck._healthPct;
+    });
+
+    if (!_healthCheckEvents.empty())
+        _nextHealthCheck = _healthCheckEvents.front();
+}
+
+void BossAI::ScheduleEnrageTimer(uint32 spellId, Milliseconds timer, uint8 textId /*= 0*/)
+{
+    me->m_Events.AddEventAtOffset([this, spellId, textId]
+    {
+        if (!me->IsAlive())
+            return;
+
+        if (textId)
+            Talk(textId);
+
+        DoCastSelf(spellId, true);
+    }, timer);
 }
 
 // WorldBossAI - for non-instanced bosses

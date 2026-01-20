@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -30,6 +30,8 @@
 #include "Player.h"
 #include "ScriptMgr.h"
 #include <unordered_map>
+
+#include "BattlegroundUtils.h"
 
 /*********************************************************/
 /***            BATTLEGROUND QUEUE SYSTEM              ***/
@@ -364,7 +366,7 @@ void BattlegroundQueue::RemovePlayer(ObjectGuid guid, bool decreaseInvitedCount)
 
 void BattlegroundQueue::AddEvent(BasicEvent* Event, uint64 e_time)
 {
-    m_events.AddEvent(Event, m_events.CalculateTime(e_time));
+    m_events.AddEventAtOffset(Event, Milliseconds(e_time));
 }
 
 bool BattlegroundQueue::IsPlayerInvitedToRatedArena(ObjectGuid pl_guid)
@@ -760,7 +762,7 @@ void BattlegroundQueue::BattlegroundQueueUpdate(uint32 diff, BattlegroundTypeId 
     }
 
     // get min and max players per team
-    uint32 MinPlayersPerTeam = bg_template->GetMinPlayersPerTeam();
+    uint32 MinPlayersPerTeam = GetMinPlayersPerTeam(bg_template, bracketEntry);
     uint32 MaxPlayersPerTeam = bg_template->GetMaxPlayersPerTeam();
 
     if (bg_template->isArena())
@@ -772,6 +774,9 @@ void BattlegroundQueue::BattlegroundQueueUpdate(uint32 diff, BattlegroundTypeId 
         MinPlayersPerTeam = 1;
 
     sScriptMgr->OnQueueUpdate(this, diff, bgTypeId, bracket_id, arenaType, isRated, arenaRating);
+
+    if (!sScriptMgr->OnQueueUpdateValidity(this, diff, bgTypeId, bracket_id, arenaType, isRated, arenaRating))
+        return;
 
     m_SelectionPools[TEAM_ALLIANCE].Init();
     m_SelectionPools[TEAM_HORDE].Init();
@@ -992,11 +997,11 @@ void BattlegroundQueue::BattlegroundQueueAnnouncerUpdate(uint32 diff, Battlegrou
                 _queueAnnouncementTimer[bracket_id] = -1;
 
                 auto bgName = bg_template->GetName();
-                uint32 MaxPlayers = bg_template->GetMinPlayersPerTeam() * 2;
+                uint32 MaxPlayers = GetMinPlayersPerTeam(bg_template, bracketEntry) * 2;
                 uint32 q_min_level = std::min(bracketEntry->minLevel, (uint32) 80);
                 uint32 q_max_level = std::min(bracketEntry->maxLevel, (uint32) 80);
 
-                sWorld->SendWorldTextOptional(LANG_BG_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_BG_QUEUE, bgName.c_str(), q_min_level, q_max_level, qPlayers, MaxPlayers);
+                ChatHandler(nullptr).SendWorldTextOptional(LANG_BG_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_BG_QUEUE, bgName.c_str(), q_min_level, q_max_level, qPlayers, MaxPlayers);
             }
             else
             {
@@ -1043,7 +1048,7 @@ void BattlegroundQueue::SendMessageBGQueue(Player* leader, Battleground* bg, PvP
 
     BattlegroundBracketId bracketId = bracketEntry->GetBracketId();
     auto bgName = bg->GetName();
-    uint32 MinPlayers = bg->GetMinPlayersPerTeam();
+    uint32 MinPlayers = GetMinPlayersPerTeam(bg, bracketEntry);
     uint32 MaxPlayers = MinPlayers * 2;
     uint32 q_min_level = std::min(bracketEntry->minLevel, (uint32)80);
     uint32 q_max_level = std::min(bracketEntry->maxLevel, (uint32)80);
@@ -1057,7 +1062,7 @@ void BattlegroundQueue::SendMessageBGQueue(Player* leader, Battleground* bg, PvP
     // Show queue status to player only (when joining battleground queue or Arena and arena world announcer is disabled)
     if (sWorld->getBoolConfig(CONFIG_BATTLEGROUND_QUEUE_ANNOUNCER_PLAYERONLY))
     {
-        ChatHandler(leader->GetSession()).PSendSysMessage(LANG_BG_QUEUE_ANNOUNCE_SELF, bgName.c_str(), q_min_level, q_max_level,
+        ChatHandler(leader->GetSession()).PSendSysMessage(LANG_BG_QUEUE_ANNOUNCE_SELF, bgName, q_min_level, q_max_level,
             qAlliance, (MinPlayers > qAlliance) ? MinPlayers - qAlliance : (uint32)0,
             qHorde, (MinPlayers > qHorde) ? MinPlayers - qHorde : (uint32)0);
     }
@@ -1077,7 +1082,7 @@ void BattlegroundQueue::SendMessageBGQueue(Player* leader, Battleground* bg, PvP
                 return;
             }
 
-            sWorld->SendWorldTextOptional(LANG_BG_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_BG_QUEUE, bgName.c_str(), q_min_level, q_max_level, qAlliance + qHorde, MaxPlayers);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_BG_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_BG_QUEUE, bgName.c_str(), q_min_level, q_max_level, qAlliance + qHorde, MaxPlayers);
         }
     }
 }
@@ -1107,7 +1112,7 @@ void BattlegroundQueue::SendJoinMessageArenaQueue(Player* leader, GroupQueueInfo
 
         BattlegroundBracketId bracketId = bracketEntry->GetBracketId();
         auto bgName = bg->GetName();
-        auto arenatype = Acore::StringFormat("%uv%u", ginfo->ArenaType, ginfo->ArenaType);
+        auto arenatype = Acore::StringFormat("{}v{}", ginfo->ArenaType, ginfo->ArenaType);
         uint32 playersNeed = ArenaTeam::GetReqPlayersForType(ginfo->ArenaType);
         uint32 q_min_level = std::min(bracketEntry->minLevel, (uint32)80);
         uint32 q_max_level = std::min(bracketEntry->maxLevel, (uint32)80);
@@ -1119,7 +1124,7 @@ void BattlegroundQueue::SendJoinMessageArenaQueue(Player* leader, GroupQueueInfo
         if (sWorld->getBoolConfig(CONFIG_ARENA_QUEUE_ANNOUNCER_PLAYERONLY))
         {
             ChatHandler(leader->GetSession()).PSendSysMessage(LANG_ARENA_QUEUE_ANNOUNCE_SELF,
-                bgName, arenatype.c_str(), q_min_level, q_max_level, qPlayers, playersNeed - qPlayers);
+                bgName, arenatype, q_min_level, q_max_level, qPlayers, playersNeed - qPlayers);
         }
         else
         {
@@ -1128,7 +1133,7 @@ void BattlegroundQueue::SendJoinMessageArenaQueue(Player* leader, GroupQueueInfo
                 return;
             }
 
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, bgName.c_str(), arenatype.c_str(), q_min_level, q_max_level, qPlayers, playersNeed);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, bgName.c_str(), arenatype.c_str(), q_min_level, q_max_level, qPlayers, playersNeed);
         }
     }
     else
@@ -1147,16 +1152,16 @@ void BattlegroundQueue::SendJoinMessageArenaQueue(Player* leader, GroupQueueInfo
         switch (announcementDetail)
         {
         case 3:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_NAME_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType, ArenaTeamRating);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_NAME_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType, ArenaTeamRating);
             break;
         case 2:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_NAME, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_NAME, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName, ArenaType, ArenaType);
             break;
         case 1:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType, ArenaTeamRating);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType, ArenaTeamRating);
             break;
         default:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_JOIN, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType);
             break;
         }
     }
@@ -1187,16 +1192,16 @@ void BattlegroundQueue::SendExitMessageArenaQueue(GroupQueueInfo* ginfo)
         switch (announcementDetail)
         {
         case 3:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_NAME_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType, ArenaTeamRating);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_NAME_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType, ArenaTeamRating);
             break;
         case 2:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_NAME, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName.c_str(), ArenaType, ArenaType);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_NAME, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, TeamName, ArenaType, ArenaType);
             break;
         case 1:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType, ArenaTeamRating);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT_RATING, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType, ArenaTeamRating);
             break;
         default:
-            sWorld->SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType);
+            ChatHandler(nullptr).SendWorldTextOptional(LANG_ARENA_QUEUE_ANNOUNCE_WORLD_EXIT, ANNOUNCER_FLAG_DISABLE_ARENA_QUEUE, ArenaType, ArenaType);
             break;
         }
     }
@@ -1269,7 +1274,7 @@ void BattlegroundQueue::InviteGroupToBG(GroupQueueInfo* ginfo, Battleground* bg,
         // send status packet
         WorldPacket data;
         sBattlegroundMgr->BuildBattlegroundStatusPacket(&data, bg, queueSlot, STATUS_WAIT_JOIN, INVITE_ACCEPT_WAIT_TIME, 0, ginfo->ArenaType, TEAM_NEUTRAL, bg->isRated());
-        player->GetSession()->SendPacket(&data);
+        player->SendDirectMessage(&data);
 
         // pussywizard:
         if (bg->isArena() && bg->isRated())
@@ -1307,7 +1312,7 @@ bool BGQueueInviteEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
             // send remaining time in queue
             WorldPacket data;
             sBattlegroundMgr->BuildBattlegroundStatusPacket(&data, bg, queueSlot, STATUS_WAIT_JOIN, INVITE_ACCEPT_WAIT_TIME - INVITATION_REMIND_TIME, 0, m_ArenaType, TEAM_NEUTRAL, bg->isRated(), m_BgTypeId);
-            player->GetSession()->SendPacket(&data);
+            player->SendDirectMessage(&data);
         }
     }
 
@@ -1350,8 +1355,11 @@ bool BGQueueRemoveEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
                     CharacterDatabase.Execute(stmt);
                 }
 
-                sScriptMgr->OnBattlegroundDesertion(player, BG_DESERTION_TYPE_NO_ENTER_BUTTON);
+                sScriptMgr->OnPlayerBattlegroundDesertion(player, BG_DESERTION_TYPE_NO_ENTER_BUTTON);
             }
+
+            if (bg && bg->isArena() && (bg->GetStatus() == STATUS_IN_PROGRESS || bg->GetStatus() == STATUS_WAIT_JOIN))
+                sScriptMgr->OnPlayerBattlegroundDesertion(player, ARENA_DESERTION_TYPE_NO_ENTER_BUTTON);
 
             LOG_DEBUG("bg.battleground", "Battleground: removing player {} from bg queue for instance {} because of not pressing enter battle in time.", player->GetGUID().ToString(), m_BgInstanceGUID);
 

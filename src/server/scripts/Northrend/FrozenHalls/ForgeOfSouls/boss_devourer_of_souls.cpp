@@ -1,26 +1,27 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "Spell.h"
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "forge_of_souls.h"
 
 enum eTexts
@@ -203,7 +204,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -224,14 +225,14 @@ public:
                     if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 40.0f, true))
                         me->CastSpell(target, SPELL_WELL_OF_SOULS, false);
                     events.Repeat(25s, 30s);
-                    events.DelayEventsToMax(4000, 0);
+                    events.DelayEventsToMax(4s, 0);
                     break;
                 case EVENT_SPELL_UNLEASHED_SOULS:
                     me->CastSpell(me, SPELL_UNLEASHED_SOULS, false);
                     Talk(SAY_FACE_UNLEASH_SOUL);
                     Talk(EMOTE_UNLEASH_SOUL);
                     events.Repeat(30s, 40s);
-                    events.DelayEventsToMax(5000, 0);
+                    events.DelayEventsToMax(5s, 0);
                     me->setAttackTimer(BASE_ATTACK, 5500);
                     break;
                 case EVENT_SPELL_WAILING_SOULS:
@@ -240,7 +241,7 @@ public:
                     if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 0.0f, true))
                         me->CastCustomSpell(SPELL_WAILING_SOULS_TARGETING, SPELLVALUE_MAX_TARGETS, 1, target, false);
                     events.Repeat(80s);
-                    events.DelayEventsToMax(20000, 0);
+                    events.DelayEventsToMax(20s, 0);
                     break;
             }
 
@@ -257,7 +258,7 @@ public:
 
         void KilledUnit(Unit* victim) override
         {
-            if (victim->GetTypeId() != TYPEID_PLAYER)
+            if (!victim->IsPlayer())
                 return;
 
             int32 textId = 0;
@@ -307,72 +308,66 @@ public:
     }
 };
 
-class spell_wailing_souls_periodic : public SpellScriptLoader
+class spell_wailing_souls_periodic_aura : public AuraScript
 {
-public:
-    spell_wailing_souls_periodic() : SpellScriptLoader("spell_wailing_souls_periodic") { }
+    PrepareAuraScript(spell_wailing_souls_periodic_aura);
 
-    class spell_wailing_souls_periodic_AuraScript : public AuraScript
+    bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        PrepareAuraScript(spell_wailing_souls_periodic_AuraScript);
+        return ValidateSpellInfo({ SPELL_WAILING_SOULS_DMG_N });
+    }
 
-        int8 dir;
+    int8 dir;
 
-        bool Load() override
+    bool Load() override
+    {
+        dir = urand(0, 1) ? 1 : -1;
+        return true;
+    }
+
+    void HandlePeriodicTick(AuraEffect const* aurEff)
+    {
+        PreventDefaultAction();
+        if (Unit* t = GetTarget())
         {
-            dir = urand(0, 1) ? 1 : -1;
-            return true;
-        }
-
-        void HandlePeriodicTick(AuraEffect const* aurEff)
-        {
-            PreventDefaultAction();
-            if (Unit* t = GetTarget())
+            if (aurEff->GetTickNumber() < 30)
             {
-                if (aurEff->GetTickNumber() < 30)
-                {
-                    // spinning, casting, etc.
-                    float diff = (2 * M_PI) / (4 * 30);
-                    float new_o = t->GetOrientation() + diff * dir;
-                    if (new_o >= 2 * M_PI)
-                        new_o -= 2 * M_PI;
-                    else if (new_o < 0)
-                        new_o += 2 * M_PI;
-                    t->UpdateOrientation(new_o);
-                    t->SetFacingTo(new_o);
-                    t->CastSpell(t, SPELL_WAILING_SOULS_DMG_N, true);
-                }
-                else if (aurEff->GetTickNumber() == 33)
-                {
-                    t->SetControlled(false, UNIT_STATE_ROOT);
-                    t->DisableRotate(false);
-                    if (t->GetTypeId() == TYPEID_UNIT)
-                        t->ToCreature()->SetReactState(REACT_AGGRESSIVE);
-                    if (t->GetVictim())
-                    {
-                        t->SetGuidValue(UNIT_FIELD_TARGET, t->GetVictim()->GetGUID());
-                        t->GetMotionMaster()->MoveChase(t->GetVictim());
-                    }
-                }
-                else if (aurEff->GetTickNumber() >= 34)
-                    Remove(AURA_REMOVE_BY_EXPIRE);
+                // spinning, casting, etc.
+                float diff = (2 * M_PI) / (4 * 30);
+                float new_o = t->GetOrientation() + diff * dir;
+                if (new_o >= 2 * M_PI)
+                    new_o -= 2 * M_PI;
+                else if (new_o < 0)
+                    new_o += 2 * M_PI;
+                t->UpdateOrientation(new_o);
+                t->SetFacingTo(new_o);
+                t->CastSpell(t, SPELL_WAILING_SOULS_DMG_N, true);
             }
+            else if (aurEff->GetTickNumber() == 33)
+            {
+                t->SetControlled(false, UNIT_STATE_ROOT);
+                t->DisableRotate(false);
+                if (t->IsCreature())
+                    t->ToCreature()->SetReactState(REACT_AGGRESSIVE);
+                if (t->GetVictim())
+                {
+                    t->SetGuidValue(UNIT_FIELD_TARGET, t->GetVictim()->GetGUID());
+                    t->GetMotionMaster()->MoveChase(t->GetVictim());
+                }
+            }
+            else if (aurEff->GetTickNumber() >= 34)
+                Remove(AURA_REMOVE_BY_EXPIRE);
         }
+    }
 
-        void Register() override
-        {
-            OnEffectPeriodic += AuraEffectPeriodicFn(spell_wailing_souls_periodic_AuraScript::HandlePeriodicTick, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
-        }
-    };
-
-    AuraScript* GetAuraScript() const override
+    void Register() override
     {
-        return new spell_wailing_souls_periodic_AuraScript();
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_wailing_souls_periodic_aura::HandlePeriodicTick, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
 void AddSC_boss_devourer_of_souls()
 {
     new boss_devourer_of_souls();
-    new spell_wailing_souls_periodic();
+    RegisterSpellScript(spell_wailing_souls_periodic_aura);
 }

@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "PassiveAI.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "violet_hold.h"
 
@@ -32,10 +32,8 @@ enum Yells
 
 enum eSpells
 {
-    SPELL_SHROUD_OF_DARKNESS_N                      = 54524,
-    SPELL_SHROUD_OF_DARKNESS_H                      = 59745,
-    SPELL_VOID_SHIFT_N                              = 54361,
-    SPELL_VOID_SHIFT_H                              = 59743,
+    SPELL_SHROUD_OF_DARKNESS                        = 54524,
+    SPELL_VOID_SHIFT                                = 54361,
     SPELL_SUMMON_VOID_SENTRY                        = 54369,
     SPELL_SUMMON_VOID_SENTRY_BALL                   = 58650,
 
@@ -44,8 +42,6 @@ enum eSpells
 };
 
 #define NPC_VOID_SENTRY_BALL                        29365
-#define SPELL_SHROUD_OF_DARKNESS                    DUNGEON_MODE(SPELL_SHROUD_OF_DARKNESS_N, SPELL_SHROUD_OF_DARKNESS_H)
-#define SPELL_VOID_SHIFT                            DUNGEON_MODE(SPELL_VOID_SHIFT_N, SPELL_VOID_SHIFT_H)
 
 enum eEvents
 {
@@ -103,7 +99,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -226,7 +222,7 @@ public:
                 if (Creature* c = pInstance->instance->GetCreature(SummonedGUID))
                     c->DespawnOrUnsummon();
             }
-            me->DespawnOrUnsummon(5000);
+            me->DespawnOrUnsummon(5s);
         }
 
         void SummonedCreatureDespawn(Creature* pSummoned) override

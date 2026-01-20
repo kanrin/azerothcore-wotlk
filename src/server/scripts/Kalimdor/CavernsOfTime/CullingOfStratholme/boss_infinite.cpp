@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "culling_of_stratholme.h"
 
@@ -37,7 +37,8 @@ enum Yells
 {
     SAY_AGGRO                                   = 0,
     SAY_DEATH                                   = 1,
-    SAY_FAIL                                    = 2
+    SAY_FAIL                                    = 2,
+    SAY_THANKS                                  = 0
 };
 
 class boss_infinite_corruptor : public CreatureScript
@@ -66,7 +67,7 @@ public:
             summons.DespawnAll();
             if (InstanceScript* pInstance = me->GetInstanceScript())
                 if (pInstance->GetData(DATA_GUARDIANTIME_EVENT) == 0)
-                    me->DespawnOrUnsummon(500);
+                    me->DespawnOrUnsummon(500ms);
 
             me->SummonCreature(NPC_TIME_RIFT, 2337.6f, 1270.0f, 132.95f, 2.79f);
             me->SummonCreature(NPC_GUARDIAN_OF_TIME, 2319.3f, 1267.7f, 132.8f, 1.0f);
@@ -78,8 +79,8 @@ public:
         void JustEngagedWith(Unit* /*who*/) override
         {
             me->InterruptNonMeleeSpells(false);
-            events.ScheduleEvent(EVENT_SPELL_VOID_STRIKE, 8000);
-            events.ScheduleEvent(EVENT_SPELL_CORRUPTING_BLIGHT, 12000);
+            events.ScheduleEvent(EVENT_SPELL_VOID_STRIKE, 8s);
+            events.ScheduleEvent(EVENT_SPELL_CORRUPTING_BLIGHT, 12s);
             Talk(SAY_AGGRO);
         }
 
@@ -92,13 +93,13 @@ public:
                 {
                     if (cr->GetEntry() == NPC_TIME_RIFT)
                     {
-                        cr->DespawnOrUnsummon(1000);
+                        cr->DespawnOrUnsummon(1s);
                     }
                     else
                     {
-                        cr->DespawnOrUnsummon(5000);
+                        cr->DespawnOrUnsummon(5s);
                         cr->RemoveAllAuras();
-                        cr->Say("You have my thanks for saving my existence in this timeline. Now i must report back to my superiors. They must know immediately of what i just experienced.", LANG_UNIVERSAL);
+                        cr->AI()->Talk(SAY_THANKS);
                     }
                 }
             }
@@ -119,7 +120,7 @@ public:
             {
                 Talk(SAY_FAIL);
                 summons.DespawnAll();
-                me->DespawnOrUnsummon(500);
+                me->DespawnOrUnsummon(500ms);
             }
         }
 
@@ -146,12 +147,12 @@ public:
             {
                 case EVENT_SPELL_VOID_STRIKE:
                     me->CastSpell(me->GetVictim(), SPELL_VOID_STRIKE, false);
-                    events.RepeatEvent(8000);
+                    events.Repeat(8s);
                     break;
                 case EVENT_SPELL_CORRUPTING_BLIGHT:
                     if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 50.0f, true))
                         me->CastSpell(target, SPELL_CORRUPTING_BLIGHT, false);
-                    events.RepeatEvent(12000);
+                    events.Repeat(12s);
                     break;
             }
 

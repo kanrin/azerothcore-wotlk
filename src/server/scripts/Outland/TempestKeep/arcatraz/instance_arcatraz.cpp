@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
-#include "ScriptMgr.h"
 #include "arcatraz.h"
 
 DoorData const doorData[] =
@@ -37,7 +37,7 @@ ObjectData const creatureData[] =
 class instance_arcatraz : public InstanceMapScript
 {
 public:
-    instance_arcatraz() : InstanceMapScript("instance_arcatraz", 552) { }
+    instance_arcatraz() : InstanceMapScript("instance_arcatraz", MAP_TEMPEST_KEEP_THE_ARCATRAZ) { }
 
     struct instance_arcatraz_InstanceMapScript : public InstanceScript
     {
@@ -55,7 +55,7 @@ public:
             {
                 case GO_CONTAINMENT_CORE_SECURITY_FIELD_ALPHA:
                 case GO_CONTAINMENT_CORE_SECURITY_FIELD_BETA:
-                    AddDoor(go, true);
+                    AddDoor(go);
                     break;
                 case GO_STASIS_POD_ALPHA:
                     StasisPodGUIDs[0] = go->GetGUID();

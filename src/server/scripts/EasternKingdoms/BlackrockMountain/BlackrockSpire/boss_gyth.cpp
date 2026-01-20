@@ -1,24 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
-#include "blackrock_spire.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "blackrock_spire.h"
 
 enum Spells
 {
@@ -61,13 +62,20 @@ public:
 
         void Reset() override
         {
-            _summonedRend = false;
             if (instance->GetBossState(DATA_GYTH) == IN_PROGRESS)
             {
                 instance->SetBossState(DATA_GYTH, NOT_STARTED);
                 summons.DespawnAll();
                 me->DespawnOrUnsummon();
             }
+
+            SetInvincibility(true); // Don't let boss die before summoning Rend.
+
+            ScheduleHealthCheckEvent(25, [&] {
+                DoCastAOE(SPELL_SUMMON_REND, true);
+                me->RemoveAura(SPELL_REND_MOUNTS);
+                SetInvincibility(false);
+            });
         }
 
         void JustEngagedWith(Unit* /*who*/) override
@@ -88,7 +96,7 @@ public:
 
         void IsSummonedBy(WorldObject* /*summoner*/) override
         {
-            events.ScheduleEvent(EVENT_SUMMONED_1, 1000);
+            events.ScheduleEvent(EVENT_SUMMONED_1, 1s);
         }
 
         void JustSummoned(Creature* summon) override
@@ -101,21 +109,6 @@ public:
         void JustDied(Unit* /*killer*/) override
         {
             instance->SetBossState(DATA_GYTH, DONE);
-        }
-
-        void DamageTaken(Unit* /*attacker*/, uint32& damage, DamageEffectType /*type*/, SpellSchoolMask /*school*/) override
-        {
-            if (!_summonedRend && me->HealthBelowPctDamaged(25, damage))
-            {
-                if (damage >= me->GetHealth())
-                {
-                    // Let creature fall to 1 HP but prevent it from dying before boss is summoned.
-                    damage = me->GetHealth() - 1;
-                }
-                DoCast(me, SPELL_SUMMON_REND, true);
-                me->RemoveAura(SPELL_REND_MOUNTS);
-                _summonedRend = true;
-            }
         }
 
         void UpdateAI(uint32 diff) override
@@ -135,7 +128,7 @@ public:
                             events.ScheduleEvent(EVENT_SUMMONED_2, 2s);
                             break;
                         case EVENT_SUMMONED_2:
-                            me->GetMotionMaster()->MovePath(GYTH_PATH_1, false);
+                            me->GetMotionMaster()->MoveWaypoint(GYTH_PATH_1, false);
                             break;
                         default:
                             break;
@@ -172,9 +165,6 @@ public:
             }
             DoMeleeAttackIfReady();
         }
-
-        private:
-            bool _summonedRend;
     };
 
     CreatureAI* GetAI(Creature* creature) const override

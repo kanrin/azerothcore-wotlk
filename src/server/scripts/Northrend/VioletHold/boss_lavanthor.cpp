@@ -1,38 +1,31 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "violet_hold.h"
 
 enum eSpells
 {
     SPELL_CAUTERIZING_FLAMES                  = 59466,
-    SPELL_FIREBOLT_N                          = 54235,
-    SPELL_FIREBOLT_H                          = 59468,
-    SPELL_FLAME_BREATH_N                      = 54282,
-    SPELL_FLAME_BREATH_H                      = 59469,
-    SPELL_LAVA_BURN_N                         = 54249,
-    SPELL_LAVA_BURN_H                         = 59594,
+    SPELL_FIREBOLT                            = 54235,
+    SPELL_FLAME_BREATH                        = 54282,
+    SPELL_LAVA_BURN                           = 54249
 };
-
-#define SPELL_FIREBOLT                      DUNGEON_MODE(SPELL_FIREBOLT_N, SPELL_FIREBOLT_H)
-#define SPELL_FLAME_BREATH                  DUNGEON_MODE(SPELL_FLAME_BREATH_N, SPELL_FLAME_BREATH_H)
-#define SPELL_LAVA_BURN                     DUNGEON_MODE(SPELL_LAVA_BURN_N, SPELL_LAVA_BURN_H)
 
 enum eEvents
 {
@@ -88,7 +81,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;

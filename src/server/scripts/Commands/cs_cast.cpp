@@ -1,32 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-Name: cast_commandscript
-%Complete: 100
-Comment: All cast related commands
-Category: commandscripts
-EndScriptData */
-
 #include "Chat.h"
+#include "CommandScript.h"
 #include "Creature.h"
 #include "Language.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
 
@@ -70,15 +63,13 @@ public:
     {
         if (!spell)
         {
-            handler->PSendSysMessage(LANG_COMMAND_NOSPELLFOUND);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_COMMAND_NOSPELLFOUND);
             return false;
         }
 
         if (!SpellMgr::IsSpellValid(spell))
         {
-            handler->PSendSysMessage(LANG_COMMAND_SPELL_BROKEN, spell->Id);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_COMMAND_SPELL_BROKEN, spell->Id);
             return false;
         }
         return true;
@@ -101,8 +92,7 @@ public:
         Unit* target = handler->getSelectedUnit();
         if (!target)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 
@@ -127,8 +117,7 @@ public:
         Creature* caster = handler->getSelectedCreature();
         if (!caster)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 
@@ -174,8 +163,7 @@ public:
         Unit* target = handler->getSelectedUnit();
         if (!target)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 
@@ -200,15 +188,13 @@ public:
         Creature* caster = handler->getSelectedCreature();
         if (!caster)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 
         if (!caster->GetVictim())
         {
-            handler->SendSysMessage(LANG_SELECTED_TARGET_NOT_HAVE_VICTIM);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECTED_TARGET_NOT_HAVE_VICTIM);
             return false;
         }
 
@@ -233,8 +219,7 @@ public:
         Unit* caster = handler->getSelectedUnit();
         if (!caster)
         {
-            handler->SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
-            handler->SetSentErrorMessage(true);
+            handler->SendErrorMessage(LANG_SELECT_CHAR_OR_CREATURE);
             return false;
         }
 

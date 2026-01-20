@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,7 +18,6 @@
 #ifndef ACORE_SMARTAI_H
 #define ACORE_SMARTAI_H
 
-#include "Common.h"
 #include "Creature.h"
 #include "CreatureAI.h"
 #include "GameObjectAI.h"
@@ -41,6 +40,8 @@ enum SmartEscortVars
     SMART_MAX_AID_DIST                  = SMART_ESCORT_MAX_PLAYER_DIST / 2,
 };
 
+#define DISTANCING_CONSTANT 1.f // buffer for better functionality of distancing
+
 class SmartAI : public CreatureAI
 {
 public:
@@ -51,25 +52,27 @@ public:
     bool IsAIControlled() const;
 
     // Start moving to the desired MovePoint
-    void StartPath(bool run = false, uint32 path = 0, bool repeat = false, Unit* invoker = nullptr);
-    bool LoadPath(uint32 entry);
+    void StartPath(ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, uint32 path = 0, bool repeat = false, Unit* invoker = nullptr, PathSource pathSource = PathSource::SMART_WAYPOINT_MGR);
+    bool LoadPath(uint32 entry, PathSource pathSource);
     void PausePath(uint32 delay, bool forced = false);
     void StopPath(uint32 DespawnTime = 0, uint32 quest = 0, bool fail = false);
     void EndPath(bool fail = false);
     void ResumePath();
-    WayPoint* GetNextWayPoint();
+    WaypointData const* GetNextWayPoint();
     void GenerateWayPointArray(Movement::PointsArray* points);
     bool HasEscortState(uint32 uiEscortState) { return (mEscortState & uiEscortState); }
     void AddEscortState(uint32 uiEscortState) { mEscortState |= uiEscortState; }
     bool IsEscorted() override { return (mEscortState & SMART_ESCORT_ESCORTING); }
     void RemoveEscortState(uint32 uiEscortState) { mEscortState &= ~uiEscortState; }
     void SetAutoAttack(bool on) { mCanAutoAttack = on; }
-    void SetCombatMove(bool on);
-    bool CanCombatMove() { return mCanCombatMove; }
+    void SetCombatMovement(bool on, bool stopOrStartMovement);
+    void SetCurrentRangeMode(bool on, float range = 0.f);
+    void SetMainSpell(uint32 spellId);
+    void DistanceYourself(float range);
     void SetFollow(Unit* target, float dist = 0.0f, float angle = 0.0f, uint32 credit = 0, uint32 end = 0, uint32 creditType = 0, bool aliveState = true);
     void StopFollow(bool complete);
 
-    void SetScript9(SmartScriptHolder& e, uint32 entry, Unit* invoker);
+    void SetScript9(SmartScriptHolder& e, uint32 entry, WorldObject* invoker);
     SmartScript* GetScript() { return &mScript; }
     bool IsEscortInvokerInRange();
 
@@ -96,6 +99,9 @@ public:
 
     // Called when a summoned unit dies
     void SummonedCreatureDies(Creature* summon, Unit* killer) override;
+
+    // Called when a summoned unit evades
+    void SummonedCreatureEvade(Creature* summon) override;
 
     // Tell creature to attack and follow the victim
     void AttackStart(Unit* who) override;
@@ -128,7 +134,7 @@ public:
     void IsSummonedBy(WorldObject* summoner) override;
 
     // Called at any Damage to any victim (before damage apply)
-    void DamageDealt(Unit* doneTo, uint32& damage, DamageEffectType damagetyp) override;
+    void DamageDealt(Unit* doneTo, uint32& damage, DamageEffectType damagetyp, SpellSchoolMask damageSchoolMask) override;
 
     // Called when a summoned creature dissapears (UnSommoned)
     void SummonedCreatureDespawn(Creature* unit) override;
@@ -155,10 +161,11 @@ public:
     uint32 GetData(uint32 id = 0) const override;
 
     // Used in scripts to share variables
-    void SetData(uint32 id, uint32 value) override;
+    void SetData(uint32 id, uint32 value) override { SetData(id, value, nullptr); }
+    void SetData(uint32 id, uint32 value, WorldObject* invoker);
 
     // Used in scripts to share variables
-    void SetGUID(ObjectGuid guid, int32 id = 0) override;
+    void SetGUID(ObjectGuid const& guid, int32 id = 0) override;
 
     // Used in scripts to share variables
     ObjectGuid GetGUID(int32 id = 0) const override;
@@ -168,9 +175,6 @@ public:
 
     // Called at movepoint reached
     void MovepointReached(uint32 id);
-
-    // Makes the creature run/walk
-    void SetRun(bool run = true);
 
     void SetFly(bool fly = true);
 
@@ -200,9 +204,19 @@ public:
 
     void OnSpellClick(Unit* clicker, bool& result) override;
 
+    void PathEndReached(uint32 pathId) override;
+
+    bool CanRespawn() override { return mcanSpawn; };
+    void SetCanRespawn(bool canSpawn) { mcanSpawn = canSpawn; }
+
     // Xinef
     void SetWPPauseTimer(uint32 time) { mWPPauseTimer = time; }
-    void SetForcedCombatMove(float dist);
+
+    void DistancingEnded() override;
+
+    bool IsMainSpellPrevented(SpellInfo const* spellInfo) const;
+
+    void OnSpellCastFinished(SpellInfo const* spell, SpellFinishReason reason) override;
 
 private:
     bool mIsCharmed;
@@ -218,22 +232,21 @@ private:
     void ReturnToLastOOCPos();
     void UpdatePath(const uint32 diff);
     SmartScript mScript;
-    WPPath* mWayPoints;
+    WaypointPath const* mWayPoints;
     uint32 mEscortState;
     uint32 mCurrentWPID;
     bool mWPReached;
     bool mOOCReached;
     uint32 mWPPauseTimer;
-    WayPoint* mLastWP;
+    WaypointData const* mLastWP;
     uint32 mEscortNPCFlags;
     uint32 GetWPCount() { return mWayPoints ? mWayPoints->size() : 0; }
     bool mCanRepeatPath;
-    bool mRun;
     bool mEvadeDisabled;
     bool mCanAutoAttack;
-    bool mCanCombatMove;
     bool mForcedPaused;
     uint32 mInvincibilityHpLevel;
+    ForcedMovement mForcedMovement;
 
     bool AssistPlayerInCombatAgainst(Unit* who);
 
@@ -243,10 +256,20 @@ private:
     uint32 mEscortInvokerCheckTimer;
     bool mJustReset;
 
+    bool mcanSpawn;
+
     // Xinef: Vehicle conditions
     void CheckConditions(const uint32 diff);
     ConditionList conditions;
     uint32 m_ConditionsTimer;
+
+    bool _chaseOnInterrupt;
+    std::unordered_map<uint32, uint32> aiDataSet;
+
+    bool _currentRangeMode;
+    float _attackDistance;
+    float _pendingDistancing;
+    uint32 _mainSpellId;
 };
 
 class SmartGameObjectAI : public GameObjectAI
@@ -267,8 +290,9 @@ public:
     bool QuestAccept(Player* player, Quest const* quest) override;
     bool QuestReward(Player* player, Quest const* quest, uint32 opt) override;
     void Destroyed(Player* player, uint32 eventId) override;
-    void SetData(uint32 id, uint32 value) override;
-    void SetScript9(SmartScriptHolder& e, uint32 entry, Unit* invoker);
+    void SetData(uint32 id, uint32 value) override { SetData(id, value, nullptr); }
+    void SetData(uint32 id, uint32 value, WorldObject* invoker);
+    void SetScript9(SmartScriptHolder& e, uint32 entry, WorldObject* invoker);
     void OnGameEvent(bool start, uint16 eventId) override;
     void OnStateChanged(uint32 state, Unit* unit) override;
     void EventInform(uint32 eventId) override;
@@ -282,6 +306,9 @@ public:
 
     // Called when a summoned unit dies
     void SummonedCreatureDies(Creature* summon, Unit* killer) override;
+
+    // Called when a summoned unit evades
+    void SummonedCreatureEvade(Creature* summon) override;
 
 protected:
     SmartScript mScript;

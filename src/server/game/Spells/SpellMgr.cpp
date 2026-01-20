@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,20 +18,16 @@
 #include "SpellMgr.h"
 #include "BattlefieldMgr.h"
 #include "BattlegroundIC.h"
-#include "BattlegroundMgr.h"
 #include "Chat.h"
 #include "DBCStores.h"
-#include "GameGraveyard.h"
 #include "InstanceScript.h"
-#include "MapMgr.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "ScriptMgr.h"
 #include "SharedDefines.h"
 #include "Spell.h"
 #include "SpellAuraDefines.h"
-#include "SpellAuras.h"
 #include "SpellInfo.h"
-#include "ScriptMgr.h"
 #include "World.h"
 
 bool IsPrimaryProfessionSkill(uint32 skill)
@@ -197,7 +193,7 @@ DiminishingGroup GetDiminishingReturnsGroupForSpell(SpellInfo const* spellproto,
             {
                 // Storm, Earth and Fire - Earthgrab
                 if (spellproto->SpellFamilyFlags[2] & 0x4000)
-                    return DIMINISHING_NONE;
+                    return DIMINISHING_CONTROLLED_ROOT;
                 break;
             }
         case SPELLFAMILY_DEATHKNIGHT:
@@ -492,7 +488,7 @@ uint32 SpellMgr::GetSpellIdForDifficulty(uint32 spellId, Unit const* caster) con
     if (!GetSpellInfo(spellId))
         return spellId;
 
-    if (!caster || !caster->GetMap() || !caster->GetMap()->IsDungeon())
+    if (!caster || !caster->GetMap() || (!caster->GetMap()->IsDungeon() && !caster->GetMap()->IsBattleground()))
         return spellId;
 
     uint32 mode = uint32(caster->GetMap()->GetSpawnMode());
@@ -606,9 +602,9 @@ uint32 SpellMgr::GetSpellWithRank(uint32 spell_id, uint32 rank, bool strict) con
     return spell_id;
 }
 
-SpellRequiredMapBounds SpellMgr::GetSpellsRequiredForSpellBounds(uint32 spell_id) const
+Acore::IteratorPair<SpellRequiredMap::const_iterator> SpellMgr::GetSpellsRequiredForSpellBounds(uint32 spell_id) const
 {
-    return mSpellReq.equal_range(spell_id);
+    return Acore::Containers::MapEqualRange(mSpellReq, spell_id);
 }
 
 SpellsRequiringSpellMapBounds SpellMgr::GetSpellsRequiringSpellBounds(uint32 spell_id) const
@@ -649,82 +645,143 @@ SpellTargetPosition const* SpellMgr::GetSpellTargetPosition(uint32 spell_id, Spe
     return nullptr;
 }
 
-SpellGroupStackFlags SpellMgr::GetGroupStackFlags(uint32 groupid) const
+SpellSpellGroupMapBounds SpellMgr::GetSpellSpellGroupMapBounds(uint32 spell_id) const
 {
-    SpellGroupStackMap::const_iterator itr = mSpellGroupStackMap.find(groupid);
-    if (itr != mSpellGroupStackMap.end())
+    spell_id = GetFirstSpellInChain(spell_id);
+    return mSpellSpellGroup.equal_range(spell_id);
+}
+
+bool SpellMgr::IsSpellMemberOfSpellGroup(uint32 spell_id, SpellGroup group_id) const
+{
+    SpellSpellGroupMapBounds spellGroup = GetSpellSpellGroupMapBounds(spell_id);
+    for (SpellSpellGroupMap::const_iterator itr = spellGroup.first; itr != spellGroup.second; ++itr)
+    {
+        if (itr->second == group_id)
+            return true;
+    }
+    return false;
+}
+
+SpellGroupSpellMapBounds SpellMgr::GetSpellGroupSpellMapBounds(SpellGroup group_id) const
+{
+    return mSpellGroupSpell.equal_range(group_id);
+}
+
+void SpellMgr::GetSetOfSpellsInSpellGroup(SpellGroup group_id, std::set<uint32>& foundSpells) const
+{
+    std::set<SpellGroup> usedGroups;
+    GetSetOfSpellsInSpellGroup(group_id, foundSpells, usedGroups);
+}
+
+void SpellMgr::GetSetOfSpellsInSpellGroup(SpellGroup group_id, std::set<uint32>& foundSpells, std::set<SpellGroup>& usedGroups) const
+{
+    if (usedGroups.find(group_id) != usedGroups.end())
+        return;
+    usedGroups.insert(group_id);
+
+    SpellGroupSpellMapBounds groupSpell = GetSpellGroupSpellMapBounds(group_id);
+    for (SpellGroupSpellMap::const_iterator itr = groupSpell.first; itr != groupSpell.second; ++itr)
+    {
+        if (itr->second < 0)
+        {
+            SpellGroup currGroup = (SpellGroup)abs(itr->second);
+            GetSetOfSpellsInSpellGroup(currGroup, foundSpells, usedGroups);
+        }
+        else
+        {
+            foundSpells.insert(itr->second);
+        }
+    }
+}
+
+bool SpellMgr::AddSameEffectStackRuleSpellGroups(SpellInfo const* spellInfo, uint32 auraType, int32 amount, std::map<SpellGroup, int32>& groups) const
+{
+    uint32 spellId = spellInfo->GetFirstRankSpell()->Id;
+    auto spellGroupBounds = GetSpellSpellGroupMapBounds(spellId);
+    // Find group with SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT if it belongs to one
+    for (auto itr = spellGroupBounds.first; itr != spellGroupBounds.second; ++itr)
+    {
+        SpellGroup group = itr->second;
+        auto found = mSpellSameEffectStack.find(group);
+        if (found != mSpellSameEffectStack.end())
+        {
+            // check auraTypes
+            if (!found->second.count(auraType))
+                continue;
+
+            // Put the highest amount in the map
+            auto groupItr = groups.find(group);
+            if (groupItr == groups.end())
+                groups.emplace(group, amount);
+            else
+            {
+                int32 curr_amount = groups[group];
+                // Take absolute value because this also counts for the highest negative aura
+                if (std::abs(curr_amount) < std::abs(amount))
+                    groupItr->second = amount;
+            }
+            // return because a spell should be in only one SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT group per auraType
+            return true;
+        }
+    }
+    // Not in a SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT group, so return false
+    return false;
+}
+
+SpellGroupStackRule SpellMgr::CheckSpellGroupStackRules(SpellInfo const* spellInfo1, SpellInfo const* spellInfo2) const
+{
+    ASSERT(spellInfo1);
+    ASSERT(spellInfo2);
+
+    uint32 spell_id1 = spellInfo1->GetFirstRankSpell()->Id;
+    uint32 spell_id2 = spellInfo2->GetFirstRankSpell()->Id;
+
+    // find SpellGroups which are common for both spells
+    SpellSpellGroupMapBounds spellGroup1 = GetSpellSpellGroupMapBounds(spell_id1);
+    std::set<SpellGroup> groups;
+    for (SpellSpellGroupMap::const_iterator itr = spellGroup1.first; itr != spellGroup1.second; ++itr)
+    {
+        if (IsSpellMemberOfSpellGroup(spell_id2, itr->second))
+        {
+            bool add = true;
+            SpellGroupSpellMapBounds groupSpell = GetSpellGroupSpellMapBounds(itr->second);
+            for (SpellGroupSpellMap::const_iterator itr2 = groupSpell.first; itr2 != groupSpell.second; ++itr2)
+            {
+                if (itr2->second < 0)
+                {
+                    SpellGroup currGroup = (SpellGroup)abs(itr2->second);
+                    if (IsSpellMemberOfSpellGroup(spell_id1, currGroup) && IsSpellMemberOfSpellGroup(spell_id2, currGroup))
+                    {
+                        add = false;
+                        break;
+                    }
+                }
+            }
+            if (add)
+                groups.insert(itr->second);
+        }
+    }
+
+    SpellGroupStackRule rule = SPELL_GROUP_STACK_RULE_DEFAULT;
+
+    for (std::set<SpellGroup>::iterator itr = groups.begin(); itr!= groups.end(); ++itr)
+    {
+        SpellGroupStackMap::const_iterator found = mSpellGroupStack.find(*itr);
+        if (found != mSpellGroupStack.end())
+            rule = found->second;
+        if (rule)
+            break;
+    }
+    return rule;
+}
+
+SpellGroupStackRule SpellMgr::GetSpellGroupStackRule(SpellGroup group) const
+{
+    SpellGroupStackMap::const_iterator itr = mSpellGroupStack.find(group);
+    if (itr != mSpellGroupStack.end())
         return itr->second;
 
-    return SPELL_GROUP_STACK_FLAG_NONE;
-}
-
-uint32 SpellMgr::GetSpellGroup(uint32 spell_id) const
-{
-    uint32 first_rank = GetFirstSpellInChain(spell_id);
-    SpellGroupMap::const_iterator itr = mSpellGroupMap.find(first_rank);
-    if (itr != mSpellGroupMap.end())
-        return itr->second.groupId;
-
-    return 0;
-}
-
-SpellGroupSpecialFlags SpellMgr::GetSpellGroupSpecialFlags(uint32 spell_id) const
-{
-    uint32 first_rank = GetFirstSpellInChain(spell_id);
-    SpellGroupMap::const_iterator itr = mSpellGroupMap.find(first_rank);
-    if (itr != mSpellGroupMap.end())
-        return itr->second.specialFlags;
-
-    return SPELL_GROUP_SPECIAL_FLAG_NONE;
-}
-
-SpellGroupStackFlags SpellMgr::CheckSpellGroupStackRules(SpellInfo const* spellInfo1, SpellInfo const* spellInfo2, bool remove, bool areaAura) const
-{
-    uint32 spellid_1 = spellInfo1->GetFirstRankSpell()->Id;
-    uint32 spellid_2 = spellInfo2->GetFirstRankSpell()->Id;
-
-    uint32 groupId = GetSpellGroup(spellid_1);
-
-    SpellGroupSpecialFlags flag1 = GetSpellGroupSpecialFlags(spellid_1);
-
-    // xinef: dunno why i added this
-    if (spellid_1 == spellid_2 && remove && !areaAura)
-    {
-        if (flag1 & SPELL_GROUP_SPECIAL_FLAG_SAME_SPELL_CHECK)
-        {
-            return SPELL_GROUP_STACK_FLAG_EXCLUSIVE;
-        }
-
-        return SPELL_GROUP_STACK_FLAG_NONE;
-    }
-
-    if (groupId > 0 && groupId == GetSpellGroup(spellid_2))
-    {
-        SpellGroupSpecialFlags flag2 = GetSpellGroupSpecialFlags(spellid_2);
-        SpellGroupStackFlags additionFlag = SPELL_GROUP_STACK_FLAG_NONE;
-        // xinef: first flags are used for elixir stacking rules
-        if (flag1 & SPELL_GROUP_SPECIAL_FLAG_STACK_EXCLUSIVE_MAX && flag2 & SPELL_GROUP_SPECIAL_FLAG_STACK_EXCLUSIVE_MAX)
-        {
-            if (flag1 & flag2)
-                return SPELL_GROUP_STACK_FLAG_NEVER_STACK;
-        }
-        // xinef: check only flag1 (new spell)
-        else if (flag1 & SPELL_GROUP_SPECIAL_FLAG_FORCED_STRONGEST)
-            additionFlag = SPELL_GROUP_STACK_FLAG_FORCED_STRONGEST;
-        else if (flag2 & SPELL_GROUP_SPECIAL_FLAG_FORCED_STRONGEST)
-            additionFlag = SPELL_GROUP_STACK_FLAG_FORCED_WEAKEST;
-
-        return SpellGroupStackFlags(GetGroupStackFlags(groupId) | additionFlag);
-    }
-
-    return SPELL_GROUP_STACK_FLAG_NONE;
-}
-
-void SpellMgr::GetSetOfSpellsInSpellGroupWithFlag(uint32 group_id, SpellGroupSpecialFlags flag, std::set<uint32>& availableElixirs) const
-{
-    for (SpellGroupMap::const_iterator itr = mSpellGroupMap.begin(); itr != mSpellGroupMap.end(); ++itr)
-        if (itr->second.groupId == group_id && itr->second.specialFlags == flag)
-            availableElixirs.insert(itr->first); // insert spell id
+    return SPELL_GROUP_STACK_RULE_DEFAULT;
 }
 
 SpellProcEventEntry const* SpellMgr::GetSpellProcEvent(uint32 spellId) const
@@ -1112,10 +1169,10 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
                 AreaTableEntry const* pArea = sAreaTableStore.LookupEntry(player->GetAreaId());
                 if (!(pArea && pArea->flags & AREA_FLAG_NO_FLY_ZONE))
                     return false;
-                if (!player->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED) && !player->HasAuraType(SPELL_AURA_FLY))
+                if (!player->HasIncreaseMountedFlightSpeedAura() && !player->HasFlyAura())
                     return false;
                 // Xinef: Underbelly elixir
-                if (player->GetPositionZ() < 637.0f && player->HasAuraType(SPELL_AURA_TRANSFORM))
+                if (player->GetPositionZ() < 637.0f && player->HasTransformAura())
                     return false;
                 break;
             }
@@ -1125,7 +1182,7 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
                     return false;
 
                 Battlefield* Bf = sBattlefieldMgr->GetBattlefieldToZoneId(player->GetZoneId());
-                if (!Bf || Bf->CanFlyIn() || (!player->HasAuraType(SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED) && !player->HasAuraType(SPELL_AURA_FLY)))
+                if (!Bf || Bf->CanFlyIn() || (!player->HasIncreaseMountedFlightSpeedAura() && !player->HasFlyAura()))
                     return false;
                 break;
             }
@@ -1615,7 +1672,7 @@ void SpellMgr::LoadSpellTargetPositions()
         }
         if (found)
         {
-            if (!sSpellMgr->GetSpellTargetPosition(i))
+            if (!GetSpellTargetPosition(i))
                 LOG_DEBUG("spells.aura", "Spell (ID: {}) does not have record in `spell_target_position`", i);
         }
     }*/
@@ -1628,10 +1685,11 @@ void SpellMgr::LoadSpellGroups()
 {
     uint32 oldMSTime = getMSTime();
 
-    mSpellGroupMap.clear();                                  // need for reload case
+    mSpellSpellGroup.clear();                                  // need for reload case
+    mSpellGroupSpell.clear();
 
-    //                                                0     1            2
-    QueryResult result = WorldDatabase.Query("SELECT id, spell_id, special_flag FROM spell_group");
+    //                                                    0       1
+    QueryResult result = WorldDatabase.Query("SELECT id, spell_id FROM spell_group");
     if (!result)
     {
         LOG_WARN("server.loading", ">> Loaded 0 spell group definitions. DB table `spell_group` is empty.");
@@ -1639,48 +1697,68 @@ void SpellMgr::LoadSpellGroups()
         return;
     }
 
+    std::set<uint32> groups;
     uint32 count = 0;
     do
     {
         Field* fields = result->Fetch();
 
         uint32 group_id = fields[0].Get<uint32>();
-        int32 spell_id = fields[1].Get<uint32>();
-        SpellGroupSpecialFlags specialFlag = (SpellGroupSpecialFlags)fields[2].Get<uint32>();
-        SpellInfo const* spellInfo = GetSpellInfo(spell_id);
-
-        if (!spellInfo)
+        if (group_id <= SPELL_GROUP_DB_RANGE_MIN && group_id >= SPELL_GROUP_CORE_RANGE_MAX)
         {
-            LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` does not exist", spell_id);
+            LOG_ERROR("sql.sql", "SpellGroup id {} listed in `spell_group` is in core range, but is not defined in core!", group_id);
             continue;
         }
-        else if (spellInfo->GetRank() > 1)
-        {
-            LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` is not first rank of spell", spell_id);
-            continue;
-        }
+        int32 spell_id = fields[1].Get<int32>();
 
-        if (mSpellGroupMap.find(spell_id) != mSpellGroupMap.end())
-        {
-            LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` has more than one group", spell_id);
-            continue;
-        }
+        groups.insert(group_id);
+        mSpellGroupSpell.emplace(SpellGroup(group_id), spell_id);
 
-        if (specialFlag >= SPELL_GROUP_SPECIAL_FLAG_MAX)
-        {
-            LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` has invalid special flag!", spell_id);
-            continue;
-        }
-
-        SpellStackInfo ssi;
-        ssi.groupId = group_id;
-        ssi.specialFlags = specialFlag;
-        mSpellGroupMap[spell_id] = ssi;
-
-        ++count;
     } while (result->NextRow());
 
-    LOG_INFO("server.loading", ">> Loaded {} Spell Group Definitions in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+    for (auto itr = mSpellGroupSpell.begin(); itr!= mSpellGroupSpell.end();)
+    {
+        if (itr->second < 0)
+        {
+            if (groups.find(abs(itr->second)) == groups.end())
+            {
+                LOG_ERROR("sql.sql", "SpellGroup id {} listed in `spell_group` does not exist", abs(itr->second));
+                itr = mSpellGroupSpell.erase(itr);
+            }
+            else
+                ++itr;
+        }
+        else
+        {
+            SpellInfo const* spellInfo = GetSpellInfo(itr->second);
+            if (!spellInfo)
+            {
+                LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` does not exist", itr->second);
+                itr = mSpellGroupSpell.erase(itr);
+            }
+            else if (spellInfo->GetRank() > 1)
+            {
+                LOG_ERROR("sql.sql", "Spell {} listed in `spell_group` is not first rank of spell.", itr->second);
+                itr = mSpellGroupSpell.erase(itr);
+            }
+            else
+                ++itr;
+        }
+    }
+
+    for (auto groupItr = groups.begin(); groupItr != groups.end(); ++groupItr)
+    {
+        std::set<uint32> spells;
+        GetSetOfSpellsInSpellGroup(SpellGroup(*groupItr), spells);
+
+        for (auto spellItr = spells.begin(); spellItr != spells.end(); ++spellItr)
+        {
+            ++count;
+            mSpellSpellGroup.emplace(*spellItr, SpellGroup(*groupItr));
+        }
+    }
+
+    LOG_INFO("server.loading", ">> Loaded {} spell group Definitions in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
     LOG_INFO("server.loading", " ");
 }
 
@@ -1688,7 +1766,10 @@ void SpellMgr::LoadSpellGroupStackRules()
 {
     uint32 oldMSTime = getMSTime();
 
-    mSpellGroupStackMap.clear();                                  // need for reload case
+    mSpellGroupStack.clear();                                  // need for reload case
+    mSpellSameEffectStack.clear();
+
+    std::vector<uint32> sameEffectGroups;
 
     //                                                       0         1
     QueryResult result = WorldDatabase.Query("SELECT group_id, stack_rule FROM spell_group_stack_rules");
@@ -1706,32 +1787,132 @@ void SpellMgr::LoadSpellGroupStackRules()
 
         uint32 group_id = fields[0].Get<uint32>();
         uint8 stack_rule = fields[1].Get<int8>();
-        if (stack_rule >= SPELL_GROUP_STACK_FLAG_MAX)
+        if (stack_rule >= SPELL_GROUP_STACK_RULE_MAX)
         {
-            LOG_ERROR("sql.sql", "SpellGroupStackRule {} listed in `spell_group_stack_rules` does not exist", stack_rule);
+            LOG_ERROR("sql.sql", "SpellGroupStackRule {} listed in `spell_group_stack_rules` does not exist.", stack_rule);
             continue;
         }
 
-        bool present = false;
-        for (SpellGroupMap::const_iterator itr = mSpellGroupMap.begin(); itr != mSpellGroupMap.end(); ++itr)
-            if (itr->second.groupId == group_id)
-            {
-                present = true;
-                break;
-            }
-
-        if (!present)
+        auto bounds = GetSpellGroupSpellMapBounds((SpellGroup)group_id);
+        if (bounds.first == bounds.second)
         {
-            LOG_ERROR("sql.sql", "SpellGroup id {} listed in `spell_group_stack_rules` does not exist", group_id);
+            LOG_ERROR("sql.sql", "SpellGroup id {} listed in `spell_group_stack_rules` does not exist.", group_id);
             continue;
         }
 
-        mSpellGroupStackMap[group_id] = (SpellGroupStackFlags)stack_rule;
+        mSpellGroupStack.emplace(SpellGroup(group_id), SpellGroupStackRule(stack_rule));
+
+        // different container for same effect stack rules, need to check effect types
+        if (stack_rule == SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT)
+            sameEffectGroups.push_back(group_id);
 
         ++count;
     } while (result->NextRow());
 
-    LOG_INFO("server.loading", ">> Loaded {} Spell Group Stack Rules in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+    LOG_INFO("server.loading", ">> Loaded {} spell group stack rules in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
+    LOG_INFO("server.loading", " ");
+
+    count = 0;
+    oldMSTime = getMSTime();
+
+    for (uint32 group_id : sameEffectGroups)
+    {
+        std::set<uint32> spellIds;
+        GetSetOfSpellsInSpellGroup(SpellGroup(group_id), spellIds);
+
+        std::unordered_set<uint32> auraTypes;
+
+        // we have to 'guess' what effect this group corresponds to
+        {
+            std::unordered_multiset<uint32 /*auraName*/> frequencyContainer;
+
+            // only waylay for the moment (shared group)
+            std::vector<std::vector<uint32 /*auraName*/>> const SubGroups =
+            {
+                { SPELL_AURA_MOD_MELEE_HASTE, SPELL_AURA_MOD_MELEE_RANGED_HASTE, SPELL_AURA_MOD_RANGED_HASTE }
+            };
+
+            for (uint32 spellId : spellIds)
+            {
+                SpellInfo const* spellInfo = AssertSpellInfo(spellId);
+                for (SpellEffectInfo const& spellEffectInfo : spellInfo->GetEffects())
+                {
+                    if (!spellEffectInfo.IsAura())
+                        continue;
+
+                    uint32 auraName = spellEffectInfo.ApplyAuraName;
+                    for (std::vector<uint32> const& subGroup : SubGroups)
+                    {
+                        if (std::find(subGroup.begin(), subGroup.end(), auraName) != subGroup.end())
+                        {
+                            // count as first aura
+                            auraName = subGroup.front();
+                            break;
+                        }
+                    }
+
+                    frequencyContainer.insert(auraName);
+                }
+            }
+
+            uint32 auraType = 0;
+            size_t auraTypeCount = 0;
+            for (uint32 auraName : frequencyContainer)
+            {
+                size_t currentCount = frequencyContainer.count(auraName);
+                if (currentCount > auraTypeCount)
+                {
+                    auraType = auraName;
+                    auraTypeCount = currentCount;
+                }
+            }
+
+            for (std::vector<uint32> const& subGroup : SubGroups)
+            {
+                if (auraType == subGroup.front())
+                {
+                    auraTypes.insert(subGroup.begin(), subGroup.end());
+                    break;
+                }
+            }
+
+            if (auraTypes.empty())
+                auraTypes.insert(auraType);
+        }
+
+        // re-check spells against guessed group
+        for (uint32 spellId : spellIds)
+        {
+            SpellInfo const* spellInfo = AssertSpellInfo(spellId);
+
+            bool found = false;
+            while (spellInfo)
+            {
+                for (uint32 auraType : auraTypes)
+                {
+                    if (spellInfo->HasAura(AuraType(auraType)))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found)
+                    break;
+
+                spellInfo = spellInfo->GetNextRankSpell();
+            }
+
+            // not found either, log error
+            if (!found)
+                LOG_ERROR("sql.sql", "SpellId {} listed in `spell_group` with stack rule 3 does not share aura assigned for group {}", spellId, group_id);
+        }
+
+        mSpellSameEffectStack[SpellGroup(group_id)] = auraTypes;
+        ++count;
+    }
+
+    LOG_INFO("server.loading", ">> Loaded {} SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT stack rules in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
     LOG_INFO("server.loading", " ");
 }
 
@@ -2323,19 +2504,8 @@ void SpellMgr::LoadPetLevelupSpellMap()
             if (!creatureFamily->skillLine[j])
                 continue;
 
-            for (uint32 k = 0; k < sSkillLineAbilityStore.GetNumRows(); ++k)
+            for (SkillLineAbilityEntry const* skillLine : GetSkillLineAbilitiesBySkillLine(creatureFamily->skillLine[j]))
             {
-                SkillLineAbilityEntry const* skillLine = sSkillLineAbilityStore.LookupEntry(k);
-                if (!skillLine)
-                    continue;
-
-                //if (skillLine->skillId != creatureFamily->skillLine[0] &&
-                //    (!creatureFamily->skillLine[1] || skillLine->skillId != creatureFamily->skillLine[1]))
-                //    continue;
-
-                if (skillLine->SkillLine != creatureFamily->skillLine[j])
-                    continue;
-
                 if (skillLine->AcquireMethod != SKILL_LINE_ABILITY_LEARNED_ON_SKILL_LEARN)
                     continue;
 
@@ -2360,7 +2530,7 @@ void SpellMgr::LoadPetLevelupSpellMap()
     LOG_INFO("server.loading", " ");
 }
 
-bool LoadPetDefaultSpells_helper(CreatureTemplate const* cInfo, PetDefaultSpellsEntry& petDefSpells)
+static bool LoadPetDefaultSpells_helper(CreatureTemplate const* cInfo, PetDefaultSpellsEntry& petDefSpells)
 {
     // skip empty list;
     bool have_spell = false;
@@ -2449,15 +2619,15 @@ void SpellMgr::LoadPetDefaultSpells()
     // different summon spells
     for (uint32 i = 0; i < GetSpellInfoStoreSize(); ++i)
     {
-        SpellInfo const* spellEntry = GetSpellInfo(i);
-        if (!spellEntry)
+        SpellInfo const* spellInfo = GetSpellInfo(i);
+        if (!spellInfo)
             continue;
 
         for (uint8 k = 0; k < MAX_SPELL_EFFECTS; ++k)
         {
-            if (spellEntry->Effects[k].Effect == SPELL_EFFECT_SUMMON || spellEntry->Effects[k].Effect == SPELL_EFFECT_SUMMON_PET)
+            if (spellInfo->Effects[k].Effect == SPELL_EFFECT_SUMMON || spellInfo->Effects[k].Effect == SPELL_EFFECT_SUMMON_PET)
             {
-                uint32 creature_id = spellEntry->Effects[k].MiscValue;
+                uint32 creature_id = spellInfo->Effects[k].MiscValue;
                 CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(creature_id);
                 if (!cInfo)
                     continue;
@@ -2925,22 +3095,14 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
                     }
                 }
                 break;
-                case SPELL_AURA_PERIODIC_HEAL:
-                case SPELL_AURA_PERIODIC_DAMAGE:
-                case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
-                case SPELL_AURA_PERIODIC_LEECH:
-                case SPELL_AURA_PERIODIC_MANA_LEECH:
-                case SPELL_AURA_PERIODIC_HEALTH_FUNNEL:
-                case SPELL_AURA_PERIODIC_ENERGIZE:
-                case SPELL_AURA_OBS_MOD_HEALTH:
-                case SPELL_AURA_OBS_MOD_POWER:
-                case SPELL_AURA_POWER_BURN:
                 case SPELL_AURA_TRACK_CREATURES:
                 case SPELL_AURA_MOD_RANGED_HASTE:
                 case SPELL_AURA_MOD_POSSESS_PET:
                 case SPELL_AURA_MOD_INVISIBILITY_DETECT:
                 case SPELL_AURA_WATER_BREATHING:
                     spellInfo->AttributesCu |= SPELL_ATTR0_CU_NO_INITIAL_THREAT;
+                    break;
+                default:
                     break;
             }
 
@@ -3049,7 +3211,7 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
             {
                 if (spellInfo->Effects[j].Effect)
                 {
-                    switch(spellInfo->Effects[j].Effect)
+                    switch (spellInfo->Effects[j].Effect)
                     {
                         case SPELL_EFFECT_SCHOOL_DAMAGE:
                         case SPELL_EFFECT_WEAPON_DAMAGE:
@@ -3076,16 +3238,27 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
                                 continue;
                             [[fallthrough]]; /// @todo: Not sure whether the fallthrough was a mistake (forgetting a break) or intended. This should be double-checked.
                         default:
-                            if (spellInfo->Effects[j].CalcValue() || ((spellInfo->Effects[j].Effect == SPELL_EFFECT_INTERRUPT_CAST || spellInfo->HasAttribute(SPELL_ATTR0_CU_DONT_BREAK_STEALTH)) && !spellInfo->HasAttribute(SPELL_ATTR0_NO_IMMUNITIES)))
-                                if (spellInfo->Id != 69649 && spellInfo->Id != 71056 && spellInfo->Id != 71057 && spellInfo->Id != 71058 && spellInfo->Id != 73061 && spellInfo->Id != 73062 && spellInfo->Id != 73063 && spellInfo->Id != 73064) // Sindragosa Frost Breath
-                                    if (spellInfo->SpellFamilyName != SPELLFAMILY_MAGE || !(spellInfo->SpellFamilyFlags[0] & 0x20)) // frostbolt
-                                        if (spellInfo->Id != 55095) // frost fever
-                                            if (spellInfo->SpellFamilyName != SPELLFAMILY_WARLOCK || !(spellInfo->SpellFamilyFlags[1] & 0x40000)) // Haunt
-                                            {
-                                                spellInfo->AttributesCu |= SPELL_ATTR0_CU_BINARY_SPELL;
-                                                break;
-                                            }
-                            continue;
+                            if (!(spellInfo->Effects[j].CalcValue() &&
+                                ((spellInfo->Effects[j].Effect == SPELL_EFFECT_INTERRUPT_CAST || spellInfo->HasAttribute(SPELL_ATTR0_CU_DONT_BREAK_STEALTH)) &&
+                                !spellInfo->HasAttribute(SPELL_ATTR0_NO_IMMUNITIES))))
+                                continue;
+
+                            if (spellInfo->Id == 69649 || spellInfo->Id == 71056 || spellInfo->Id == 71057 || spellInfo->Id == 71058 ||
+                                spellInfo->Id == 73061 || spellInfo->Id == 73062 || spellInfo->Id == 73063 || spellInfo->Id == 73064)
+                                continue;
+
+                            if (spellInfo->SpellFamilyName == SPELLFAMILY_MAGE && (spellInfo->SpellFamilyFlags[0] & 0x20)) // Frostbolt
+                                continue;
+
+                            if (spellInfo->Id == 55095) // Frost Fever
+                                continue;
+
+                            if (spellInfo->SpellFamilyName == SPELLFAMILY_WARLOCK &&
+                                ((spellInfo->SpellFamilyFlags[1] & 0x40000) || (spellInfo->SpellFamilyFlags[0] & 0x4000))) // Haunt/Drain Soul
+                                continue;
+
+                            spellInfo->AttributesCu |= SPELL_ATTR0_CU_BINARY_SPELL;
+                            break;
                     }
                 }
             }
@@ -3249,7 +3422,6 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
             case 57467: // Meteor
             case 26789: // Shard of the Fallen Star
             case 31436: // Malevolent Cleave
-            case 35181: // Dive Bomb
             case 40810: // Saber Lash
             case 43267: // Saber Lash
             case 43268: // Saber Lash
@@ -3417,15 +3589,6 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
                 }
 
             // Xinef: Cooldown overwrites
-            // Jotunheim Rapid-Fire Harpoon: Energy Reserve
-            case 56585:
-                spellInfo->RecoveryTime = 30000;
-                spellInfo->_requireCooldownInfo = true;
-                break;
-            // Jotunheim Rapid-Fire Harpoon: Rapid-Fire Harpoon
-            case 56570:
-                spellInfo->RecoveryTime = 200;
-                break;
             // Burst of Speed
             case 57493:
                 spellInfo->RecoveryTime = 60000;
@@ -3460,9 +3623,9 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
 
         spellInfo->_InitializeExplicitTargetMask();
 
-        if (sSpellMgr->HasSpellCooldownOverride(spellInfo->Id))
+        if (HasSpellCooldownOverride(spellInfo->Id))
         {
-            SpellCooldownOverride spellOverride = sSpellMgr->GetSpellCooldownOverride(spellInfo->Id);
+            SpellCooldownOverride spellOverride = GetSpellCooldownOverride(spellInfo->Id);
 
             if (spellInfo->RecoveryTime != spellOverride.RecoveryTime)
             {
@@ -3504,17 +3667,20 @@ void SpellMgr::LoadSpellInfoCustomAttributes()
         {
             if (spellInfo->Effects[j].ApplyAuraName && spellInfo->Effects[j].TriggerSpell)
             {
-                switch(spellInfo->Effects[j].ApplyAuraName)
+                switch (spellInfo->Effects[j].ApplyAuraName)
                 {
                     case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
                     case SPELL_AURA_PERIODIC_TRIGGER_SPELL_FROM_CLIENT:
                     case SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE:
-                        if (SpellInfo const* triggerSpell = sSpellMgr->GetSpellInfo(spellInfo->Effects[j].TriggerSpell))
+                        if (SpellInfo const* triggerSpell = GetSpellInfo(spellInfo->Effects[j].TriggerSpell))
                         {
                             overrideAttr = true;
                             if (triggerSpell->AttributesCu & SPELL_ATTR0_CU_BINARY_SPELL)
                                 allNonBinary = false;
                         }
+                        break;
+                    default:
+                        break;
                 }
             }
         }

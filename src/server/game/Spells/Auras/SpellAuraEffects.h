@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -55,6 +55,7 @@ public:
     uint32 GetId() const;
     uint32 GetEffIndex() const { return m_effIndex; }
     int32 GetBaseAmount() const { return m_baseAmount; }
+    int32 GetDieSides() const { return m_dieSides; }
     int32 GetAmplitude() const { return m_amplitude; }
 
     int32 GetMiscValueB() const;
@@ -109,9 +110,8 @@ public:
     uint8 GetCasterLevel() const { return m_casterLevel; }
     bool CanApplyResilience() const { return m_applyResilience; }
     float GetPctMods() const { return m_pctMods; }
+    void SetPctMods(float pctMods) { m_pctMods = pctMods; }
 
-    // xinef: stacking
-    uint32 GetAuraGroup() const { return m_auraGroup; }
     int32 GetOldAmount() const { return m_oldAmount; }
     void SetOldAmount(int32 amount) { m_oldAmount = amount; }
     void SetEnabled(bool enabled) { m_isAuraEnabled = enabled; }
@@ -121,6 +121,7 @@ private:
 
     SpellInfo const* const m_spellInfo;
     int32 const m_baseAmount;
+    int32 const m_dieSides;
 
     bool m_applyResilience;
     uint8 m_casterLevel;
@@ -128,8 +129,6 @@ private:
     float m_critChance;
     float m_pctMods;
 
-    // xinef: stacking
-    uint32 m_auraGroup;
     int32 m_oldAmount;
     bool m_isAuraEnabled;
     // xinef: channel information for channel triggering
@@ -296,6 +295,7 @@ public:
     void HandleModDamagePercentDone(AuraApplication const* aurApp, uint8 mode, bool apply) const;
     void HandleModOffhandDamagePercent(AuraApplication const* aurApp, uint8 mode, bool apply) const;
     void HandleShieldBlockValue(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+    void HandleShieldBlockValuePercent(AuraApplication const* aurApp, uint8 mode, bool apply) const;
     //  power cost
     void HandleModPowerCostPCT(AuraApplication const* aurApp, uint8 mode, bool apply) const;
     void HandleModPowerCost(AuraApplication const* aurApp, uint8 mode, bool apply) const;

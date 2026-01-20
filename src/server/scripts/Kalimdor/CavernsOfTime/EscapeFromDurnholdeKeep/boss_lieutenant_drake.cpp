@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
 #include "MoveSplineInit.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SmartScriptMgr.h"
 #include "old_hillsbrad.h"
@@ -42,24 +42,13 @@ enum Spells
 
 struct boss_lieutenant_drake : public BossAI
 {
-    boss_lieutenant_drake(Creature* creature) : BossAI(creature, DATA_LIEUTENANT_DRAKE)
-    {
-        scheduler.SetValidator([this]
-        {
-            return !me->HasUnitState(UNIT_STATE_CASTING);
-        });
-    }
+    boss_lieutenant_drake(Creature* creature) : BossAI(creature, DATA_LIEUTENANT_DRAKE) { }
 
     void InitializeAI() override
     {
         runSecondPath = false;
         pathId = me->GetEntry() * 10;
-        me->GetMotionMaster()->MovePath(pathId, false);
-    }
-
-    void Reset() override
-    {
-        _Reset();
+        me->GetMotionMaster()->MoveWaypoint(pathId, false);
     }
 
     void JustEngagedWith(Unit* /*who*/) override
@@ -92,7 +81,7 @@ struct boss_lieutenant_drake : public BossAI
             context.Repeat(25s);
         }).Schedule(1s, [this](TaskContext context)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 1, 40.0f))
+            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 40.0f, false, false))
             {
                 DoCast(target, SPELL_EXPLODING_SHOT);
             }
@@ -102,7 +91,7 @@ struct boss_lieutenant_drake : public BossAI
 
     void KilledUnit(Unit* victim) override
     {
-        if (victim->GetTypeId() == TYPEID_PLAYER)
+        if (victim->IsPlayer())
         {
             Talk(SAY_SLAY);
         }
@@ -125,10 +114,10 @@ struct boss_lieutenant_drake : public BossAI
         {
             switch (point)
             {
-                case 7:
+                case 8:
                     Talk(SAY_ENTER);
                     break;
-                case 10:
+                case 11:
                     pathId = (me->GetEntry() * 10) + 1;
                     runSecondPath = true;
                     break;
@@ -143,7 +132,7 @@ struct boss_lieutenant_drake : public BossAI
         if (runSecondPath)
         {
             runSecondPath = false;
-            me->GetMotionMaster()->MovePath(pathId, true);
+            me->GetMotionMaster()->MoveWaypoint(pathId, true);
         }
 
         if (!UpdateVictim())

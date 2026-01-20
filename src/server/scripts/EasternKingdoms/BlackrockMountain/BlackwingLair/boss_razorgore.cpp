@@ -1,24 +1,26 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CreatureScript.h"
+#include "GameObjectScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "SpellScript.h"
+#include "SpellScriptLoader.h"
 #include "blackwing_lair.h"
 
 enum Say
@@ -108,25 +110,7 @@ public:
 
         bool CanAIAttack(Unit const* target) const override
         {
-            if (target->GetTypeId() == TYPEID_UNIT && !secondPhase)
-            {
-                return false;
-            }
-
-            if (me->GetThreatMgr().GetThreatListSize() > 1)
-            {
-                ThreatContainer::StorageType::const_iterator lastRef = me->GetThreatMgr().GetOnlineContainer().GetThreatList().end();
-                --lastRef;
-                if (Unit* lastTarget = (*lastRef)->getTarget())
-                {
-                    if (lastTarget != target)
-                    {
-                        return !target->HasAura(SPELL_CONFLAGRATION);
-                    }
-                }
-            }
-
-            return true;
+            return !(target->IsCreature() && !secondPhase);
         }
 
         void JustEngagedWith(Unit* /*who*/) override
@@ -168,7 +152,7 @@ public:
             }
         }
 
-        void SetGUID(ObjectGuid const guid, int32 /*id*/) override
+        void SetGUID(ObjectGuid const& guid, int32 /*id*/) override
         {
             _charmerGUID = guid;
         }
@@ -301,43 +285,32 @@ public:
     }
 };
 
-class spell_egg_event : public SpellScriptLoader
+class spell_egg_event : public SpellScript
 {
-public:
-    spell_egg_event() : SpellScriptLoader("spell_egg_event") { }
+    PrepareSpellScript(spell_egg_event);
 
-    class spell_egg_eventSpellScript : public SpellScript
+    void HandleOnHit()
     {
-        PrepareSpellScript(spell_egg_eventSpellScript);
-
-        void HandleOnHit()
+        if (InstanceScript* instance = GetCaster()->GetInstanceScript())
         {
-            if (InstanceScript* instance = GetCaster()->GetInstanceScript())
-            {
-                instance->SetData(DATA_EGG_EVENT, SPECIAL);
-            }
-
-            if (Creature* razorgore = GetCaster()->ToCreature())
-            {
-                if (GameObject* egg = GetHitGObj())
-                {
-                    razorgore->AI()->DoAction(TALK_EGG_BROKEN_RAND);
-                    egg->SetLootState(GO_READY);
-                    egg->UseDoorOrButton(10000);
-                    egg->SetRespawnTime(WEEK);
-                }
-            }
+            instance->SetData(DATA_EGG_EVENT, SPECIAL);
         }
 
-        void Register() override
+        if (Creature* razorgore = GetCaster()->ToCreature())
         {
-            OnHit += SpellHitFn(spell_egg_eventSpellScript::HandleOnHit);
+            if (GameObject* egg = GetHitGObj())
+            {
+                razorgore->AI()->DoAction(TALK_EGG_BROKEN_RAND);
+                egg->SetLootState(GO_READY);
+                egg->UseDoorOrButton(10000);
+                egg->SetRespawnTime(WEEK);
+            }
         }
-    };
+    }
 
-    SpellScript* GetSpellScript() const override
+    void Register() override
     {
-        return new spell_egg_eventSpellScript();
+        OnHit += SpellHitFn(spell_egg_event::HandleOnHit);
     }
 };
 
@@ -345,5 +318,5 @@ void AddSC_boss_razorgore()
 {
     new boss_razorgore();
     new go_orb_of_domination();
-    new spell_egg_event();
+    RegisterSpellScript(spell_egg_event);
 }

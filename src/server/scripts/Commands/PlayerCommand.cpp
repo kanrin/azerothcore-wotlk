@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -25,8 +25,7 @@ bool Acore::PlayerCommand::HandleLearnSpellCommand(ChatHandler* handler, Player*
 {
     if (!SpellMgr::IsSpellValid(spell))
     {
-        handler->PSendSysMessage(LANG_COMMAND_SPELL_BROKEN, spell->Id);
-        handler->SetSentErrorMessage(true);
+        handler->SendErrorMessage(LANG_COMMAND_SPELL_BROKEN, spell->Id);
         return false;
     }
 
@@ -34,14 +33,13 @@ bool Acore::PlayerCommand::HandleLearnSpellCommand(ChatHandler* handler, Player*
     {
         if (targetPlayer == handler->GetPlayer())
         {
-            handler->SendSysMessage(LANG_YOU_KNOWN_SPELL);
+            handler->SendErrorMessage(LANG_YOU_KNOWN_SPELL);
         }
         else
         {
-            handler->PSendSysMessage(LANG_TARGET_KNOWN_SPELL, handler->GetNameLink(targetPlayer).c_str());
+            handler->SendErrorMessage(LANG_TARGET_KNOWN_SPELL, handler->GetNameLink(targetPlayer).c_str());
         }
 
-        handler->SetSentErrorMessage(true);
         return false;
     }
 

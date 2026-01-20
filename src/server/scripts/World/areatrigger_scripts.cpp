@@ -1,68 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Areatrigger_Scripts
-SD%Complete: 100
-SDComment: Scripts for areatriggers
-SDCategory: Areatrigger
-EndScriptData */
-
-/* ContentData
-at_coilfang_waterfall           4591
-at_legion_teleporter            4560 Teleporter TO Invasion Point: Cataclysm
-at_stormwright_shelf            q12741
-at_last_rites                   q12019
-at_sholazar_waygate             q12548
-at_nats_landing                 q11209
-at_bring_your_orphan_to         q910 q910 q1800 q1479 q1687 q1558 q10951 q10952
-at_brewfest
-at_area_52_entrance
-EndContentData */
-
+#include "AreaTriggerScript.h"
 #include "GameTime.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
-#include "SpellMgr.h"
 
-// Ours
-class AreaTrigger_at_voltarus_middle : public AreaTriggerScript
-{
-public:
-    AreaTrigger_at_voltarus_middle()
-        : AreaTriggerScript("at_voltarus_middle")
-    {
-    }
-
-    bool OnTrigger(Player* player, AreaTrigger const* /*trigger*/) override
-    {
-        if (player->IsAlive() && !player->IsInCombat())
-            if (player->HasItemCount(39319)) // Scepter of Domination
-            {
-                player->TeleportTo(571, 6242.67f, -1972.10f, 484.783f, 0.6f);
-                return true;
-            }
-
-        return false;
-    }
-};
-
-// Theirs
 /*######
 ## at_coilfang_waterfall
 ######*/
@@ -213,7 +170,7 @@ public:
     {
         QuestStatus QLR = player->GetQuestStatus(QUEST_LAST_RITES);
         QuestStatus QBT = player->GetQuestStatus(QUEST_BREAKING_THROUGH);
-        if (!(QLR == QUEST_STATUS_INCOMPLETE || QLR  == QUEST_STATUS_COMPLETE ||
+        if (!(QLR == QUEST_STATUS_INCOMPLETE || QLR  == QUEST_STATUS_COMPLETE || QLR == QUEST_STATUS_REWARDED ||
                 QBT == QUEST_STATUS_INCOMPLETE || QBT == QUEST_STATUS_COMPLETE))
             return false;
 
@@ -240,49 +197,6 @@ public:
         }
 
         player->TeleportTo(pPosition);
-
-        return false;
-    }
-};
-
-/*######
-## at_sholazar_waygate
-######*/
-
-enum Waygate
-{
-    SPELL_SHOLAZAR_TO_UNGORO_TELEPORT           = 52056,
-    SPELL_UNGORO_TO_SHOLAZAR_TELEPORT           = 52057,
-
-    AT_SHOLAZAR                                 = 5046,
-    AT_UNGORO                                   = 5047,
-
-    QUEST_THE_MAKERS_OVERLOOK                   = 12613,
-    QUEST_THE_MAKERS_PERCH                      = 12559,
-    QUEST_MEETING_A_GREAT_ONE                   = 13956,
-};
-
-class AreaTrigger_at_sholazar_waygate : public AreaTriggerScript
-{
-public:
-    AreaTrigger_at_sholazar_waygate() : AreaTriggerScript("at_sholazar_waygate") { }
-
-    bool OnTrigger(Player* player, AreaTrigger const* trigger) override
-    {
-        if (!player->isDead() && (player->GetQuestStatus(QUEST_MEETING_A_GREAT_ONE) != QUEST_STATUS_NONE ||
-                                  (player->GetQuestStatus(QUEST_THE_MAKERS_OVERLOOK) == QUEST_STATUS_REWARDED && player->GetQuestStatus(QUEST_THE_MAKERS_PERCH) == QUEST_STATUS_REWARDED)))
-        {
-            switch (trigger->entry)
-            {
-                case AT_SHOLAZAR:
-                    player->CastSpell(player, SPELL_SHOLAZAR_TO_UNGORO_TELEPORT, true);
-                    break;
-
-                case AT_UNGORO:
-                    player->CastSpell(player, SPELL_UNGORO_TO_SHOLAZAR_TELEPORT, true);
-                    break;
-            }
-        }
 
         return false;
     }
@@ -347,7 +261,7 @@ public:
 
         if (!player->FindNearestCreature(NPC_TERVOSH, 100.0f))
         {
-            if(Creature* tervosh = player->SummonCreature(NPC_TERVOSH, -3476.51f, -4105.94f, 17.1f, 5.3816f, TEMPSUMMON_TIMED_DESPAWN, 60000))
+            if (Creature* tervosh = player->SummonCreature(NPC_TERVOSH, -3476.51f, -4105.94f, 17.1f, 5.3816f, TEMPSUMMON_TIMED_DESPAWN, 60000))
                 tervosh->CastSpell(tervosh, SPELL_TELEPORT_VISUAL, true);
         }
 
@@ -481,16 +395,11 @@ private:
 
 void AddSC_areatrigger_scripts()
 {
-    // Ours
-    new AreaTrigger_at_voltarus_middle();
-
-    // Theirs
     new AreaTrigger_at_coilfang_waterfall();
     new AreaTrigger_at_legion_teleporter();
     new AreaTrigger_at_stormwright_shelf();
     new AreaTrigger_at_scent_larkorwi();
     new AreaTrigger_at_last_rites();
-    new AreaTrigger_at_sholazar_waygate();
     new AreaTrigger_at_nats_landing();
     new AreaTrigger_at_sentry_point();
     new AreaTrigger_at_brewfest();

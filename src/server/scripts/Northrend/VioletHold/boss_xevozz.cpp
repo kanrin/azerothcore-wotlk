@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "violet_hold.h"
 
@@ -32,23 +32,16 @@ enum Yells
 
 enum eSpells
 {
-    SPELL_ARCANE_BARRAGE_VOLLEY_N               = 54202,
-    SPELL_ARCANE_BARRAGE_VOLLEY_H               = 59483,
-    SPELL_ARCANE_BUFFET_N                       = 54226,
-    SPELL_ARCANE_BUFFET_H                       = 59485,
+    SPELL_ARCANE_BARRAGE_VOLLEY                 = 54202,
+    SPELL_ARCANE_BUFFET                         = 54226,
     SPELL_SUMMON_ETHEREAL_SPHERE_1              = 54102,
     SPELL_SUMMON_ETHEREAL_SPHERE_2              = 54137,
     SPELL_SUMMON_ETHEREAL_SPHERE_3              = 54138,
 
-    SPELL_ARCANE_POWER_N                        = 54160,
-    SPELL_ARCANE_POWER_H                        = 59474,
+    SPELL_ARCANE_POWER                          = 54160
     //SPELL_SUMMON_PLAYERS                      = 54164, // not used
     //SPELL_POWER_BALL_VISUAL                   = 54141,
 };
-
-#define SPELL_ARCANE_BARRAGE_VOLLEY             DUNGEON_MODE(SPELL_ARCANE_BARRAGE_VOLLEY_N, SPELL_ARCANE_BARRAGE_VOLLEY_H)
-#define SPELL_ARCANE_BUFFET                     DUNGEON_MODE(SPELL_ARCANE_BUFFET_N, SPELL_ARCANE_BUFFET_H)
-#define SPELL_ARCANE_POWER                      DUNGEON_MODE(SPELL_ARCANE_POWER_N, SPELL_ARCANE_POWER_H)
 
 enum eEvents
 {
@@ -104,7 +97,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -128,7 +121,7 @@ public:
                             while (entry1 == entry2);
                             me->CastSpell((Unit*)nullptr, entry2, true);
                         }
-                        events.RepeatEvent(45000);
+                        events.Repeat(45s);
                         events.RescheduleEvent(EVENT_SPELL_ARCANE_BUFFET, 5s);
                         events.RescheduleEvent(EVENT_CHECK_DISTANCE, 6s);
                     }
@@ -142,7 +135,7 @@ public:
                                     if (me->GetDistance(c) < 3.0f)
                                     {
                                         c->CastSpell(me, SPELL_ARCANE_POWER, false);
-                                        c->DespawnOrUnsummon(8000);
+                                        c->DespawnOrUnsummon(8s);
                                         found = true;
                                     }
                         if (found)

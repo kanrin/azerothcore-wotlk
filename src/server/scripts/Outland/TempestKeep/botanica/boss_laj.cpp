@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "the_botanica.h"
 
@@ -67,7 +67,7 @@ LajTransformData const LajTransform[5] =
 
 struct boss_laj : public BossAI
 {
-    boss_laj(Creature* creature) : BossAI(creature, DATA_LAJ) { }
+    boss_laj(Creature* creature) : BossAI(creature, DATA_LAJ), _lastTransform(LajTransform[0]) { }
 
     void Reset() override
     {
@@ -85,26 +85,26 @@ struct boss_laj : public BossAI
         }
     }
 
-    void JustEngagedWith(Unit* /*who*/) override
+    void ScheduleTasks() override
     {
-        _JustEngagedWith();
-
-        scheduler.Schedule(5s, [this](TaskContext context)
-        {
+        ScheduleTimedEvent(5s, [&] {
             DoCastVictim(SPELL_ALLERGIC_REACTION);
-            context.Repeat(25s);
-        }).Schedule(30s, [this](TaskContext context)
-        {
+        }, 25s);
+
+        ScheduleTimedEvent(30s, [&] {
             me->RemoveAurasDueToSpell(_lastTransform.spellId);
-            _lastTransform = Acore::Containers::SelectRandomContainerElementIf(_transformContainer, [&](LajTransformData data) -> bool
+            auto lastTransformItr = Acore::Containers::SelectRandomContainerElementIf(_transformContainer, [&](LajTransformData const& data) -> bool
             {
                 return data.spellId != _lastTransform.spellId;
             });
+            if (lastTransformItr == _transformContainer.end())
+                return;
+            _lastTransform = *lastTransformItr;
             me->SetDisplayId(_lastTransform.modelId);
             DoCastSelf(_lastTransform.spellId, true);
-            context.Repeat(35s);
-        }).Schedule(20s, [this](TaskContext context)
-        {
+        }, 35s);
+
+        ScheduleTimedEvent(20s, [&] {
             DoCastSelf(SPELL_TELEPORT_SELF);
             me->SetReactState(REACT_PASSIVE);
             me->GetMotionMaster()->Clear();
@@ -117,14 +117,12 @@ struct boss_laj : public BossAI
                 me->SetReactState(REACT_AGGRESSIVE);
                 me->ResumeChasingVictim();
             });
-
-            context.Repeat(30s);
-        });
+        }, 30s);
     }
 
 private:
     LajTransformData _lastTransform;
-    std::vector<LajTransformData> _transformContainer;
+    std::list<LajTransformData> _transformContainer;
 };
 
 void AddSC_boss_laj()

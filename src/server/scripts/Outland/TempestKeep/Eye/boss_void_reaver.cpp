@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "the_eye.h"
 
@@ -41,6 +41,7 @@ struct boss_void_reaver : public BossAI
 {
     boss_void_reaver(Creature* creature) : BossAI(creature, DATA_REAVER)
     {
+        callForHelpRange = 105.0f;
         scheduler.SetValidator([this]
         {
             return !me->HasUnitState(UNIT_STATE_CASTING);
@@ -82,34 +83,28 @@ struct boss_void_reaver : public BossAI
     {
         BossAI::JustEngagedWith(who);
         Talk(SAY_AGGRO);
-        me->CallForHelp(105.0f);
 
         scheduler.Schedule(10min, [this](TaskContext)
         {
             DoCastSelf(SPELL_BERSERK);
-        }).Schedule(15s, [this](TaskContext context)
+        }).Schedule(8300ms, [this](TaskContext context)
         {
             Talk(SAY_POUNDING);
             DoCastSelf(SPELL_POUNDING);
             scheduler.DelayGroup(GROUP_ARCANE_ORB, 3s);
-            context.Repeat(15s);
-        }).Schedule(3s, GROUP_ARCANE_ORB, [this](TaskContext context)
+            context.Repeat(12100ms, 15800ms);
+        }).Schedule(3450ms, GROUP_ARCANE_ORB, [this](TaskContext context)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, -18.0f, true))
-                me->CastSpell(target, SPELL_ARCANE_ORB, false);
-            else if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 20.0f, true))
-                me->CastSpell(target, SPELL_ARCANE_ORB, false);
-            context.Repeat(3s);
-        }).Schedule(30s, [this](TaskContext context)
+            if (DoCastRandomTarget(SPELL_ARCANE_ORB, 0, -20.0f) != SPELL_CAST_OK)
+            {
+                DoCastRandomTarget(SPELL_ARCANE_ORB, 0, 18.0f);
+            }
+            context.Repeat(2400ms, 6300ms);
+        }).Schedule(14350ms, [this](TaskContext context)
         {
             DoCastVictim(SPELL_KNOCK_AWAY);
-            context.Repeat(25s);
+            context.Repeat(20550ms, 22550ms);
         });
-    }
-
-    bool CheckEvadeIfOutOfCombatArea() const override
-    {
-        return me->GetDistance2d(432.59f, 371.93f) > 105.0f;
     }
 
     private:

@@ -1,37 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Tanaris
-SD%Complete: 80
-SDComment: Quest support: 1560, 2954, 4005, 10277, 10279(Special flight path). Noggenfogger vendor
-SDCategory: Tanaris
-EndScriptData */
-
-/* ContentData
-npc_aquementas
-npc_custodian_of_time
-npc_steward_of_time
-npc_stone_watcher_of_norgannon
-npc_tooga
-EndContentData */
-
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 #include "ScriptedFollowerAI.h"
@@ -121,7 +106,7 @@ public:
             {
                 if (SendItemTimer <= diff)
                 {
-                    if (me->GetVictim()->GetTypeId() == TYPEID_PLAYER)
+                    if (me->GetVictim()->IsPlayer())
                         SendItem(me->GetVictim());
                     SendItemTimer = 5000;
                 }
@@ -242,16 +227,28 @@ public:
                         break;
                     case 24:
                         Talk(WHISPER_CUSTODIAN_14, player);
-                        DoCast(player, 34883);
-                        // below here is temporary workaround, to be removed when spell works properly
-                        player->AreaExploredOrEventHappens(10277);
+                        if (Group* group = player->GetGroup())
+                        {
+                            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                            {
+                                Player* player = itr->GetSource();
+
+                                // for any leave or dead (with not released body) group member at appropriate distance
+                                if (player && player->IsAtGroupRewardDistance(me) && !player->GetCorpse())
+                                    DoCast(player, 34883); // QID 10277
+
+                            }
+                        }
+                        else
+                        {
+                            DoCast(player, 34883); // QID 10277
+                        }
                         break;
                 }
             }
         }
 
         void MoveInLineOfSight(Unit* who) override
-
         {
             if (HasEscortState(STATE_ESCORT_ESCORTING))
                 return;
@@ -263,7 +260,8 @@ public:
                     float Radius = 10.0f;
                     if (me->IsWithinDistInMap(who, Radius))
                     {
-                        Start(false, false, who->GetGUID());
+                        me->SetWalk(true);
+                        Start(false, who->GetGUID());
                     }
                 }
             }

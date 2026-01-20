@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -74,9 +74,9 @@ protected:
         EffectHook(uint8 _effIndex);
         virtual ~EffectHook() { }
 
-        uint8 GetAffectedEffectsMask(SpellInfo const* spellEntry);
-        bool IsEffectAffected(SpellInfo const* spellEntry, uint8 effIndex);
-        virtual bool CheckEffect(SpellInfo const* spellEntry, uint8 effIndex) = 0;
+        uint8 GetAffectedEffectsMask(SpellInfo const* spellInfo);
+        bool IsEffectAffected(SpellInfo const* spellInfo, uint8 effIndex);
+        virtual bool CheckEffect(SpellInfo const* spellInfo, uint8 effIndex) = 0;
         std::string EffIndexToString();
     protected:
         uint8 effIndex;
@@ -86,7 +86,7 @@ protected:
     {
     public:
         EffectNameCheck(uint16 _effName) { effName = _effName; }
-        bool Check(SpellInfo const* spellEntry, uint8 effIndex);
+        bool Check(SpellInfo const* spellInfo, uint8 effIndex);
         std::string ToString();
     private:
         uint16 effName;
@@ -96,7 +96,7 @@ protected:
     {
     public:
         EffectAuraNameCheck(uint16 _effAurName) { effAurName = _effAurName; }
-        bool Check(SpellInfo const* spellEntry, uint8 effIndex);
+        bool Check(SpellInfo const* spellInfo, uint8 effIndex);
         std::string ToString();
     private:
         uint16 effAurName;
@@ -114,7 +114,7 @@ public:
     virtual void Register() = 0;
     // Function called on server startup, if returns false script won't be used in core
     // use for: dbc/template data presence/correctness checks
-    virtual bool Validate(SpellInfo const* /*spellEntry*/) { return true; }
+    virtual bool Validate(SpellInfo const* /*spellInfo*/) { return true; }
     // Function called when script is created, if returns false script will be unloaded afterwards
     // use for: initializing local script variables (DO NOT USE CONSTRUCTOR FOR THIS PURPOSE!)
     virtual bool Load() { return true; }
@@ -218,7 +218,7 @@ public:
     public:
         EffectHandler(SpellEffectFnType _pEffectHandlerScript, uint8 _effIndex, uint16 _effName);
         std::string ToString();
-        bool CheckEffect(SpellInfo const* spellEntry, uint8 effIndex) override;
+        bool CheckEffect(SpellInfo const* spellInfo, uint8 effIndex) override;
         void Call(SpellScript* spellScript, SpellEffIndex effIndex);
     private:
         SpellEffectFnType pEffectHandlerScript;
@@ -557,7 +557,7 @@ public:
     public:
         EffectBase(uint8 _effIndex, uint16 _effName);
         std::string ToString();
-        bool CheckEffect(SpellInfo const* spellEntry, uint8 effIndex) override;
+        bool CheckEffect(SpellInfo const* spellInfo, uint8 effIndex) override;
     };
     class EffectPeriodicHandler : public EffectBase
     {

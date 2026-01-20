@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "InstanceMapScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "Vehicle.h"
 #include "eye_of_eternity.h"
@@ -29,14 +29,14 @@ bool EoEDrakeEnterVehicleEvent::Execute(uint64 /*eventTime*/, uint32 /*updateTim
             p->CastCustomSpell(60683, SPELLVALUE_BASE_POINT0, 1, &_owner, true);
             return true;
         }
-    _owner.DespawnOrUnsummon(1);
+    _owner.DespawnOrUnsummon(1ms);
     return true;
 }
 
 class instance_eye_of_eternity : public InstanceMapScript
 {
 public:
-    instance_eye_of_eternity() : InstanceMapScript("instance_eye_of_eternity", 616) { }
+    instance_eye_of_eternity() : InstanceMapScript("instance_eye_of_eternity", MAP_THE_EYE_OF_ETERNITY) { }
 
     InstanceScript* GetInstanceScript(InstanceMap* pMap) const override
     {
@@ -89,7 +89,7 @@ public:
                         c->SetCanFly(true);
                         c->SetFaction(pPlayer->GetFaction());
                         //pPlayer->CastCustomSpell(60683, SPELLVALUE_BASE_POINT0, 1, c, true);
-                        c->m_Events.AddEvent(new EoEDrakeEnterVehicleEvent(*c, pPlayer->GetGUID()), c->m_Events.CalculateTime(500));
+                        c->m_Events.AddEventAtOffset(new EoEDrakeEnterVehicleEvent(*c, pPlayer->GetGUID()), 500ms);
                     }
                 }
             }
@@ -97,7 +97,7 @@ public:
 
         void OnCreatureCreate(Creature* creature) override
         {
-            switch(creature->GetEntry())
+            switch (creature->GetEntry())
             {
                 case NPC_MALYGOS:
                     NPC_MalygosGUID = creature->GetGUID();
@@ -107,7 +107,7 @@ public:
 
         void OnGameObjectCreate(GameObject* go) override
         {
-            switch(go->GetEntry())
+            switch (go->GetEntry())
             {
                 case GO_IRIS_N:
                 case GO_IRIS_H:
@@ -124,7 +124,7 @@ public:
 
         void SetData(uint32 type, uint32 data) override
         {
-            switch(type)
+            switch (type)
             {
                 case DATA_IRIS_ACTIVATED:
                     if (EncounterStatus == NOT_STARTED)
@@ -134,7 +134,7 @@ public:
                     break;
                 case DATA_ENCOUNTER_STATUS:
                     EncounterStatus = data;
-                    switch(data)
+                    switch (data)
                     {
                         case NOT_STARTED:
                             bPokeAchiev = false;
@@ -184,7 +184,7 @@ public:
 
         ObjectGuid GetGuidData(uint32 type) const override
         {
-            switch(type)
+            switch (type)
             {
                 case DATA_MALYGOS_GUID:
                     return NPC_MalygosGUID;
@@ -195,7 +195,7 @@ public:
 
         void ProcessEvent(WorldObject* /*unit*/, uint32 eventId) override
         {
-            switch(eventId)
+            switch (eventId)
             {
                 case 20158:
                     if (GameObject* go = instance->GetGameObject(GO_PlatformGUID))
@@ -233,7 +233,7 @@ public:
 
         bool CheckAchievementCriteriaMeet(uint32 criteria_id, Player const* source, Unit const*  /*target*/, uint32  /*miscvalue1*/) override
         {
-            switch(criteria_id)
+            switch (criteria_id)
             {
                 case ACHIEV_CRITERIA_A_POKE_IN_THE_EYE_10:
                 case ACHIEV_CRITERIA_A_POKE_IN_THE_EYE_25:

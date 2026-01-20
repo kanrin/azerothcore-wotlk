@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,11 +18,13 @@
 #ifndef __SPELL_H
 #define __SPELL_H
 
+#include "ConditionMgr.h"
 #include "GridDefines.h"
-#include "ObjectMgr.h"
+#include "LootMgr.h"
 #include "PathGenerator.h"
 #include "SharedDefines.h"
 #include "SpellInfo.h"
+#include "Unit.h"
 
 class Unit;
 class Player;
@@ -37,6 +39,7 @@ class ByteBuffer;
 class BasicEvent;
 
 #define SPELL_CHANNEL_UPDATE_INTERVAL (1 * IN_MILLISECONDS)
+#define TRAJECTORY_MISSILE_SIZE 3.0f
 
 enum SpellCastFlags
 {
@@ -88,6 +91,13 @@ enum SpellRangeFlag
     SPELL_RANGE_DEFAULT             = 0,
     SPELL_RANGE_MELEE               = 1,     //melee
     SPELL_RANGE_RANGED              = 2,     //hunter range and ranged weapon
+};
+
+enum SpellFinishReason : uint8
+{
+    SPELL_FINISHED_SUCCESSFUL_CAST     = 0, // spell has sucessfully launched
+    SPELL_FINISHED_CANCELED            = 1, // spell has been canceled (interrupts)
+    SPELL_FINISHED_CHANNELING_COMPLETE = 2  // spell channeling has been finished
 };
 
 struct SpellDestination
@@ -216,6 +226,7 @@ struct SpellValue
     uint8     AuraStackAmount;
     int32     AuraDuration;
     bool      ForcedCritResult;
+    uint32    MiscVal[MAX_SPELL_EFFECTS];
 };
 
 enum SpellState
@@ -548,8 +559,10 @@ public:
     bool IsAutoRepeat() const { return m_autoRepeat; }
     void SetAutoRepeat(bool rep) { m_autoRepeat = rep; }
     void ReSetTimer() { m_timer = m_casttime > 0 ? m_casttime : 0; }
+    int32 GetCastTimeRemaining() { return m_timer;}
     bool IsNextMeleeSwingSpell() const;
-    bool IsTriggered() const { return _triggeredCastFlags & TRIGGERED_FULL_MASK; };
+    bool IsTriggered() const { return HasTriggeredCastFlag(TRIGGERED_FULL_MASK); };
+    bool HasTriggeredCastFlag(TriggerCastFlags flag) const { return _triggeredCastFlags & flag; };
     bool IsChannelActive() const { return m_caster->GetUInt32Value(UNIT_CHANNEL_SPELL) != 0; }
     bool IsAutoActionResetSpell() const;
     bool IsIgnoringCooldowns() const;
@@ -653,6 +666,9 @@ public:
     WorldLocation* destTarget;
     int32 damage;
     SpellEffectHandleMode effectHandleMode;
+    Unit* m_reflectionTarget;
+    ObjectGuid m_reflectionTargetGuid;
+    Position m_reflectionTargetPosition;
     // used in effects handlers
     Aura* m_spellAura;
 
@@ -778,14 +794,6 @@ public:
     bool _spellTargetsSelected;
 
     ByteBuffer* m_effectExecuteData[MAX_SPELL_EFFECTS];
-
-#ifdef MAP_BASED_RAND_GEN
-    int32 irand(int32 min, int32 max)       { return int32 (m_caster->GetMap()->mtRand.randInt(max - min)) + min; }
-    uint32 urand(uint32 min, uint32 max)    { return m_caster->GetMap()->mtRand.randInt(max - min) + min; }
-    int32 rand32()                          { return m_caster->GetMap()->mtRand.randInt(); }
-    double rand_norm()                      { return m_caster->GetMap()->mtRand.randExc(); }
-    double rand_chance()                    { return m_caster->GetMap()->mtRand.randExc(100.0); }
-#endif
 };
 
 namespace Acore

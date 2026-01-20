@@ -1,39 +1,27 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Npc_Professions
-SD%Complete: 80
-SDComment: Provides learn/unlearn/relearn-options for professions. Not supported: Unlearn engineering, re-learn engineering.
-SDCategory: NPCs
-EndScriptData */
-
+#include "CreatureScript.h"
+#include "GameObjectScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SpellInfo.h"
-
-/*
-A few notes for future developement:
-- A full implementation of gossip for GO's is required. They must have the same scripting capabilities as creatures. Basically,
-there is no difference here (except that default text is chosen with `gameobject_template`.`data3` (for GO type2, different dataN for a few others)
-- It's possible blacksmithing still require some tweaks and adjustments due to the way we _have_ to use reputation.
-*/
+#include "SpellMgr.h"
 
 /*###
 # to be removed from here (->ncp_text). This is data for database projects.
@@ -526,7 +514,7 @@ public:
                 player->GetSession()->SendListInventory(creature->GetGUID());
                 break;
             case GOSSIP_ACTION_TRAIN:
-                player->GetSession()->SendTrainerList(creature->GetGUID());
+                player->GetSession()->SendTrainerList(creature);
                 break;
             //Learn Alchemy
             case GOSSIP_ACTION_INFO_DEF + 1:
@@ -719,7 +707,7 @@ public:
                 player->GetSession()->SendListInventory(creature->GetGUID());
                 break;
             case GOSSIP_ACTION_TRAIN:
-                player->GetSession()->SendTrainerList(creature->GetGUID());
+                player->GetSession()->SendTrainerList(creature);
                 break;
             //Learn Armor/Weapon
             case GOSSIP_ACTION_INFO_DEF + 1:
@@ -1031,7 +1019,7 @@ public:
         switch (action)
         {
             case GOSSIP_ACTION_TRAIN:
-                player->GetSession()->SendTrainerList(creature->GetGUID());
+                player->GetSession()->SendTrainerList(creature);
                 break;
             case GOSSIP_MENU_UNLEARN_CONFIRM_DRAGONSCALE:
                 AddGossipItemFor(player, GOSSIP_MENU_UNLEARN_CONFIRM_DRAGONSCALE, GOSSIP_MENU_OPTION_CONFIRM_UNLEARN_DRAGONSCALE, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1, DoMedUnlearnCost(player));
@@ -1133,7 +1121,7 @@ public:
                 player->GetSession()->SendListInventory(creature->GetGUID());
                 break;
             case GOSSIP_ACTION_TRAIN:
-                player->GetSession()->SendTrainerList(creature->GetGUID());
+                player->GetSession()->SendTrainerList(creature);
                 break;
             //Learn Tailor
             case GOSSIP_ACTION_INFO_DEF + 1:
@@ -1283,7 +1271,7 @@ public:
 
     void SendActionMenu(Player* player, GameObject*  /*gameobject*/, uint32 uiAction)
     {
-        switch(uiAction)
+        switch (uiAction)
         {
             // Learn Goblin
             case GOSSIP_ACTION_INFO_DEF + 1:
@@ -1353,7 +1341,7 @@ public:
     bool OnGossipSelect(Player* player, GameObject* gameobject, uint32 uiSender, uint32 uiAction) override
     {
         ClearGossipMenuFor(player);
-        switch(uiSender)
+        switch (uiSender)
         {
             case GOSSIP_SENDER_LEARN:
                 SendActionMenu(player, gameobject, uiAction);

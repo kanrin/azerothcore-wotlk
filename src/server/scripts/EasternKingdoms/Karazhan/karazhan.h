@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -50,12 +50,9 @@ enum KZDataTypes
     DATA_GO_STAGEDOORRIGHT          = 20,
     DATA_GO_LIBRARY_DOOR            = 21,
     DATA_GO_MASSIVE_DOOR            = 22,
-    DATA_GO_NETHER_DOOR             = 23,
     DATA_GO_GAME_DOOR               = 24,
     DATA_GO_GAME_EXIT_DOOR          = 25,
     DATA_IMAGE_OF_MEDIVH            = 26,
-    DATA_MASTERS_TERRACE_DOOR_1     = 27,
-    DATA_MASTERS_TERRACE_DOOR_2     = 28,
     DATA_GO_SIDE_ENTRANCE_DOOR      = 29,
     DATA_PRINCE                     = 30,
     DATA_SPAWN_OPERA_DECORATIONS    = 31,
@@ -76,7 +73,9 @@ enum KZDataTypes
     DATA_ROAR                       = 41,
     DATA_STRAWMAN                   = 42,
     DATA_TINHEAD                    = 43,
-    DATA_TITO                       = 44
+    DATA_TITO                       = 44,
+
+    DATA_MIRKBLOOD                  = 45
 };
 
 enum KZOperaEvents
@@ -97,6 +96,7 @@ enum KZCreatures
     NPC_ATTUMEN_THE_HUNTSMAN_MOUNTED    = 16152,
     NPC_MIDNIGHT                        = 16151,
     NPC_NIGHTBANE                       = 17225,
+    NPC_SHADE_OF_ARAN                   = 16524,
 
     // Trash
     NPC_COLDMIST_WIDOW                  = 16171,
@@ -137,7 +137,9 @@ enum KZCreatures
 
     // Malchezaar Helpers
     NPC_INFERNAL_TARGET                 = 17644,
-    NPC_INFERNAL_RELAY                  = 17645
+    NPC_INFERNAL_RELAY                  = 17645,
+
+    NPC_TENRIS_MIRKBLOOD                = 28194
 
 };
 

@@ -1,24 +1,25 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "TaskScheduler.h"
 #include "gruuls_lair.h"
+#include "SpellMgr.h"
 
 enum HighKingMaulgar
 {
@@ -93,7 +94,7 @@ struct boss_high_king_maulgar : public BossAI
 
     void KilledUnit(Unit*  /*victim*/) override
     {
-        if(!_recentlySpoken)
+        if (!_recentlySpoken)
         {
             Talk(SAY_SLAY);
             _recentlySpoken = true;
@@ -145,7 +146,7 @@ struct boss_high_king_maulgar : public BossAI
         {
             DoCastVictim(SPELL_MIGHTY_BLOW);
             context.Repeat(16200ms, 19s);
-        }).Schedule(67000ms, [this](TaskContext context)
+        }).Schedule(67s, [this](TaskContext context)
         {
             scheduler.DelayAll(15s);
             DoCastSelf(SPELL_WHIRLWIND);
@@ -285,16 +286,7 @@ struct boss_kiggler_the_crazed : public ScriptedAI
             context.Repeat(7200ms, 20600ms);
         }).Schedule(23s, [this](TaskContext context)
         {
-            //changed to work similarly to Ikiss poly
-            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(SPELL_GREATER_POLYMORPH);
-            if (Unit* target = SelectTarget(SelectTargetMethod::MaxThreat, 1, [&]
-            (Unit* target) -> bool
-                {
-                    return target && !target->IsImmunedToSpell(spellInfo);
-                }))
-            {
-                DoCast(target, SPELL_GREATER_POLYMORPH);
-            }
+            DoCastVictim(SPELL_GREATER_POLYMORPH);
             context.Repeat(10900ms);
         }).Schedule(30s, [this](TaskContext context)
         {

@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -195,7 +195,7 @@ enum SpellCustomAttributes
     SPELL_ATTR0_CU_NEEDS_AMMO_DATA               = 0x00080000,
     SPELL_ATTR0_CU_BINARY_SPELL                  = 0x00100000,
     SPELL_ATTR0_CU_NO_POSITIVE_TAKEN_BONUS       = 0x00200000,
-    SPELL_ATTR0_CU_SINGLE_AURA_STACK             = 0x00400000, // pussywizard
+    SPELL_ATTR0_CU_SINGLE_AURA_STACK             = 0x00400000,
     SPELL_ATTR0_CU_SCHOOLMASK_NORMAL_WITH_MAGIC  = 0x00800000,
     SPELL_ATTR0_CU_AURA_CANNOT_BE_SAVED          = 0x01000000,
     SPELL_ATTR0_CU_POSITIVE_EFF0                 = 0x02000000,
@@ -203,7 +203,9 @@ enum SpellCustomAttributes
     SPELL_ATTR0_CU_POSITIVE_EFF2                 = 0x08000000,
     SPELL_ATTR0_CU_FORCE_SEND_CATEGORY_COOLDOWNS = 0x10000000,
     SPELL_ATTR0_CU_FORCE_AURA_SAVING             = 0x20000800,
-    SPELL_ATTR0_CU_ENCOUNTER_REWARD              = 0x40000000, // pussywizard
+    SPELL_ATTR0_CU_ONLY_ONE_AREA_AURA            = 0x20000000,
+    SPELL_ATTR0_CU_ENCOUNTER_REWARD              = 0x40000000,
+    SPELL_ATTR0_CU_BYPASS_MECHANIC_IMMUNITY      = 0x80000000,
 
     SPELL_ATTR0_CU_NEGATIVE                      = SPELL_ATTR0_CU_NEGATIVE_EFF0 | SPELL_ATTR0_CU_NEGATIVE_EFF1 | SPELL_ATTR0_CU_NEGATIVE_EFF2,
     SPELL_ATTR0_CU_POSITIVE                      = SPELL_ATTR0_CU_POSITIVE_EFF0 | SPELL_ATTR0_CU_POSITIVE_EFF1 | SPELL_ATTR0_CU_POSITIVE_EFF2,
@@ -246,10 +248,10 @@ private:
 class SpellEffectInfo
 {
     SpellInfo const* _spellInfo;
-    uint8 _effIndex;
 public:
+    uint8     EffectIndex;
     uint32    Effect;
-    uint32    ApplyAuraName;
+    AuraType  ApplyAuraName;
     uint32    Amplitude;
     int32     DieSides;
     float     RealPointsPerLevel;
@@ -270,7 +272,7 @@ public:
     flag96    SpellClassMask;
     std::list<Condition*>* ImplicitTargetConditions;
 
-    SpellEffectInfo() : _spellInfo(nullptr), _effIndex(0), Effect(0), ApplyAuraName(0), Amplitude(0), DieSides(0),
+    SpellEffectInfo() : _spellInfo(nullptr), EffectIndex(0), Effect(0), ApplyAuraName(SPELL_AURA_NONE), Amplitude(0), DieSides(0),
         RealPointsPerLevel(0), BasePoints(0), PointsPerComboPoint(0), ValueMultiplier(0), DamageMultiplier(0),
         BonusMultiplier(0), MiscValue(0), MiscValueB(0), Mechanic(MECHANIC_NONE), RadiusEntry(nullptr), ChainTarget(0),
         ItemType(0), TriggerSpell(0), ImplicitTargetConditions(nullptr) {}
@@ -405,6 +407,7 @@ public:
 
     uint32 GetCategory() const;
     bool HasEffect(SpellEffects effect) const;
+    bool HasEffectMechanic(Mechanics mechanic) const;
     bool HasAura(AuraType aura) const;
     bool HasAnyAura() const;
     bool HasAreaAuraEffect() const;
@@ -479,8 +482,6 @@ public:
     SpellCastResult CheckExplicitTarget(Unit const* caster, WorldObject const* target, Item const* itemTarget = nullptr) const;
     bool CheckTargetCreatureType(Unit const* target) const;
 
-    // xinef: aura stacking
-    bool IsStrongerAuraActive(Unit const* caster, Unit const* target) const;
     bool IsAuraEffectEqual(SpellInfo const* otherSpellInfo) const;
     bool ValidateAttribute6SpellDamageMods(Unit const* caster, const AuraEffect* auraEffect, bool isDot) const;
 
@@ -535,8 +536,6 @@ public:
 
     // unloading helpers
     void _UnloadImplicitTargetConditionLists();
-
-    bool CheckElixirStacking(Unit const* caster) const;
 
 private:
     std::array<SpellEffectInfo, MAX_SPELL_EFFECTS>& _GetEffects() { return Effects; }

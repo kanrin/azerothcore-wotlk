@@ -1,22 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "InstanceMapScript.h"
 #include "InstanceScript.h"
-#include "ScriptMgr.h"
 #include "magtheridons_lair.h"
 
 BossBoundaryData const boundaries =
@@ -32,13 +32,14 @@ DoorData const doorData[] =
 
 MinionData const minionData[] =
 {
-    { NPC_HELLFIRE_CHANNELER,   DATA_MAGTHERIDON }
+    { NPC_HELLFIRE_CHANNELER,   DATA_MAGTHERIDON },
+    { 0, 0 } // END
 };
 
 class instance_magtheridons_lair : public InstanceMapScript
 {
 public:
-    instance_magtheridons_lair() : InstanceMapScript("instance_magtheridons_lair", 544) { }
+    instance_magtheridons_lair() : InstanceMapScript("instance_magtheridons_lair", MAP_MAGTHERIDONS_LAIR) { }
 
     struct instance_magtheridons_lair_InstanceMapScript : public InstanceScript
     {
@@ -66,7 +67,7 @@ public:
                     _magtheridonGUID = creature->GetGUID();
                     break;
                 case NPC_HELLFIRE_CHANNELER:
-                    AddMinion(creature, true);
+                    AddMinion(creature);
                     break;
                 case NPC_HELLFIRE_WARDER:
                     _wardersSet.insert(creature->GetGUID());
@@ -79,7 +80,7 @@ public:
             switch (creature->GetEntry())
             {
                 case NPC_HELLFIRE_CHANNELER:
-                    AddMinion(creature, false);
+                    RemoveMinion(creature);
                     break;
             }
         }
@@ -89,7 +90,7 @@ public:
             switch (go->GetEntry())
             {
                 case GO_MAGTHERIDON_DOORS:
-                    AddDoor(go, true);
+                    AddDoor(go);
                     break;
                 case GO_MANTICRON_CUBE:
                     _cubesSet.insert(go->GetGUID());
@@ -111,7 +112,7 @@ public:
             switch (go->GetEntry())
             {
                 case GO_MAGTHERIDON_DOORS:
-                    AddDoor(go, false);
+                    RemoveDoor(go);
                     break;
                 case GO_MANTICRON_CUBE:
                     _cubesSet.erase(go->GetGUID());

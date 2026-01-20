@@ -1,21 +1,21 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "CreatureScript.h"
 #include "ScriptedCreature.h"
 #include "violet_hold.h"
 
@@ -23,19 +23,14 @@ enum eSpells
 {
     SPELL_BLOODLUST                             = 54516,
     SPELL_BREAK_BONDS                           = 59463,
-    SPELL_CHAIN_HEAL_N                          = 54481,
-    SPELL_CHAIN_HEAL_H                          = 59473,
-    SPELL_EARTH_SHIELD_N                        = 54479,
-    SPELL_EARTH_SHIELD_H                        = 59471,
+    SPELL_CHAIN_HEAL                            = 54481,
+    SPELL_EARTH_SHIELD                          = 54479,
     //SPELL_EARTH_SHIELD_TRIGGERED_N            = 54480,
     //SPELL_EARTH_SHIELD_TRIGGERED_H            = 59472,
     SPELL_EARTH_SHOCK                           = 54511,
     SPELL_LIGHTNING_BOLT                        = 53044,
     SPELL_STORMSTRIKE                           = 51876,
 };
-
-#define SPELL_CHAIN_HEAL                        DUNGEON_MODE(SPELL_CHAIN_HEAL_N, SPELL_CHAIN_HEAL_H)
-#define SPELL_EARTH_SHIELD                      DUNGEON_MODE(SPELL_EARTH_SHIELD_N, SPELL_EARTH_SHIELD_H)
 
 enum Yells
 {
@@ -116,7 +111,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;
@@ -280,7 +275,7 @@ public:
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
 
-            switch(events.ExecuteEvent())
+            switch (events.ExecuteEvent())
             {
                 case 0:
                     break;

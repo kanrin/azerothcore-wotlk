@@ -1,33 +1,32 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Group.h"
+#include "Player.h"
+#include "SpellAuraEffects.h"
+#include "SpellMgr.h"
+#include "SpellScript.h"
+#include "SpellScriptLoader.h"
+#include "UnitAI.h"
 /*
  * Scripts for spells with SPELLFAMILY_PALADIN and SPELLFAMILY_GENERIC spells used by paladin players.
  * Ordered alphabetically using scriptname.
  * Scriptnames of files in this file should be prefixed with "spell_pal_".
  */
-
-#include "Group.h"
-#include "Player.h"
-#include "ScriptMgr.h"
-#include "SpellAuraEffects.h"
-#include "SpellMgr.h"
-#include "SpellScript.h"
-#include "UnitAI.h"
 
 enum PaladinSpells
 {
@@ -80,8 +79,23 @@ enum PaladinSpells
     SPELL_PALADIN_SANCTIFIED_RETRIBUTION_AURA    = 63531,
     SPELL_PALADIN_AURA_MASTERY_IMMUNE            = 64364,
 
+    SPELL_JUDGEMENTS_OF_THE_JUST                 = 68055,
+    SPELL_JUDGEMENT_OF_VENGEANCE_EFFECT          = 31804,
+    SPELL_HOLY_VENGEANCE                         = 31803,
+    SPELL_JUDGEMENT_OF_CORRUPTION_EFFECT         = 53733,
+    SPELL_BLOOD_CORRUPTION                       = 53742,
+
     SPELL_GENERIC_ARENA_DAMPENING                = 74410,
-    SPELL_GENERIC_BATTLEGROUND_DAMPENING         = 74411
+    SPELL_GENERIC_BATTLEGROUND_DAMPENING         = 74411,
+
+    // Crystalforge Raiment - Tier 5 Holy 2 Set
+    SPELL_IMPROVED_JUDGEMENT                     = 37188,
+    SPELL_IMPROVED_JUDGEMENT_ENERGIZE            = 43838,
+
+    SPELL_PALADIN_HOLY_VENGEANCE                 = 31803,
+    SPELL_PALADIN_BLOOD_CORRUPTION               = 53742,
+    SPELL_PALADIN_SEAL_OF_VENGEANCE_EFFECT       = 42463,
+    SPELL_PALADIN_SEAL_OF_CORRUPTION_EFFECT      = 53739
 };
 
 enum PaladinSpellIcons
@@ -164,7 +178,7 @@ class spell_pal_divine_intervention : public AuraScript
 
     void HandleRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        if (!GetTarget()->IsInCombat() && GetTarget()->GetTypeId() == TYPEID_PLAYER)
+        if (!GetTarget()->IsInCombat() && GetTarget()->IsPlayer())
             GetTarget()->RemoveAurasDueToSpell(GetTarget()->ToPlayer()->GetTeamId() == TEAM_ALLIANCE ? 57723 : 57724);
     }
 
@@ -315,7 +329,7 @@ private:
     {
         healPct = GetSpellInfo()->Effects[EFFECT_1].CalcValue();
         absorbPct = GetSpellInfo()->Effects[EFFECT_0].CalcValue();
-        return GetUnitOwner()->GetTypeId() == TYPEID_PLAYER;
+        return GetUnitOwner()->IsPlayer();
     }
 
     void CalculateAmount(AuraEffect const* /*aurEff*/, int32& amount, bool& /*canBeRecalculated*/)
@@ -459,11 +473,7 @@ class spell_pal_blessing_of_sanctuary : public AuraScript
     {
         Unit* target = GetTarget();
         if (Unit* caster = GetCaster())
-        {
-            // xinef: hack
-            int32 value = 9;
-            caster->CastCustomSpell(target, SPELL_PALADIN_BLESSING_OF_SANCTUARY_BUFF, &value, &value, 0, true);
-        }
+            caster->CastSpell(target, SPELL_PALADIN_BLESSING_OF_SANCTUARY_BUFF, true);
     }
 
     void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
@@ -474,7 +484,7 @@ class spell_pal_blessing_of_sanctuary : public AuraScript
 
     bool CheckProc(ProcEventInfo& /*eventInfo*/)
     {
-        return GetTarget()->getPowerType() == POWER_MANA;
+        return GetTarget()->HasActivePowerType(POWER_MANA);
     }
 
     void HandleProc(AuraEffect const* aurEff, ProcEventInfo& /*eventInfo*/)
@@ -504,7 +514,7 @@ class spell_pal_divine_sacrifice : public AuraScript
     {
         if (Unit* caster = GetCaster())
         {
-            if (caster->GetTypeId() == TYPEID_PLAYER)
+            if (caster->IsPlayer())
             {
                 if (caster->ToPlayer()->GetGroup())
                     groupSize = caster->ToPlayer()->GetGroup()->GetMembersCount();
@@ -665,8 +675,9 @@ class spell_pal_glyph_of_holy_light : public SpellScript
 
     void FilterTargets(std::list<WorldObject*>& targets)
     {
-        uint32 const maxTargets = GetSpellInfo()->MaxAffectedTargets;
+        targets.remove(GetExplTargetUnit());
 
+        uint32 const maxTargets = GetSpellInfo()->MaxAffectedTargets;
         if (targets.size() > maxTargets)
         {
             targets.sort(Acore::HealthPctOrderPred());
@@ -872,9 +883,34 @@ public:
         GetCaster()->CastSpell(GetHitUnit(), _spellId, true);
         GetCaster()->CastSpell(GetHitUnit(), spellId2, true);
 
+        // Tier 5 Holy - 2 Set
+        if (GetCaster()->HasAura(SPELL_IMPROVED_JUDGEMENT))
+        {
+            GetCaster()->CastSpell(GetCaster(), SPELL_IMPROVED_JUDGEMENT_ENERGIZE, true);
+        }
+
         // Judgement of the Just
         if (GetCaster()->GetAuraEffect(SPELL_AURA_ADD_FLAT_MODIFIER, SPELLFAMILY_PALADIN, 3015, 0))
-            GetCaster()->CastSpell(GetHitUnit(), 68055, true);
+        {
+            if (GetCaster()->CastSpell(GetHitUnit(), SPELL_JUDGEMENTS_OF_THE_JUST, true) && (spellId2 == SPELL_JUDGEMENT_OF_VENGEANCE_EFFECT || spellId2 == SPELL_JUDGEMENT_OF_CORRUPTION_EFFECT))
+            {
+                //hidden effect only cast when spellcast of judgements of the just is succesful
+                GetCaster()->CastSpell(GetHitUnit(), SealApplication(spellId2), true); //add hidden seal apply effect for vengeance and corruption
+            }
+        }
+    }
+
+    uint32 SealApplication(uint32 correspondingSpellId)
+    {
+        switch (correspondingSpellId)
+        {
+            case SPELL_JUDGEMENT_OF_VENGEANCE_EFFECT:
+                return SPELL_HOLY_VENGEANCE;
+            case SPELL_JUDGEMENT_OF_CORRUPTION_EFFECT:
+                return SPELL_BLOOD_CORRUPTION;
+            default:
+                return 0;
+        }
     }
 
     void Register() override
@@ -925,17 +961,35 @@ class spell_pal_lay_on_hands : public SpellScript
         return true;
     }
 
+    void HandleMaxHealthHeal(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetExplTargetUnit();
+
+        if (!target || !caster)
+            return;
+
+        uint32 baseHeal = caster->GetMaxHealth();
+        uint32 modifiedHeal = target->SpellHealingBonusTaken(caster, GetSpellInfo(), baseHeal, HEAL);
+
+        // EffectHealMaxHealth() ignores healing modifiers, so we pre-apply the
+        // difference here; this delta will be added on top of the raw heal.
+        int64 healAdjustment = int64(modifiedHeal) - int64(baseHeal);
+
+        SetHitHeal(healAdjustment);
+    }
+
     SpellCastResult CheckCast()
     {
         Unit* caster = GetCaster();
         if (Unit* target = GetExplTargetUnit())
             if (caster == target)
-                if (target->HasAura(SPELL_PALADIN_FORBEARANCE) || target->HasAura(SPELL_PALADIN_AVENGING_WRATH_MARKER) || target->HasAura(SPELL_PALADIN_IMMUNE_SHIELD_MARKER))
+                if (target->HasAnyAuras(SPELL_PALADIN_FORBEARANCE, SPELL_PALADIN_AVENGING_WRATH_MARKER, SPELL_PALADIN_IMMUNE_SHIELD_MARKER))
                     return SPELL_FAILED_TARGET_AURASTATE;
 
         // Xinef: Glyph of Divinity
         if (Unit* target = GetExplTargetUnit())
-            if (target->getPowerType() == POWER_MANA)
+            if (target->HasActivePowerType(POWER_MANA))
                 _manaAmount = target->GetPower(POWER_MANA);
 
         return SPELL_CAST_OK;
@@ -964,6 +1018,7 @@ class spell_pal_lay_on_hands : public SpellScript
     {
         OnCheckCast += SpellCheckCastFn(spell_pal_lay_on_hands::CheckCast);
         AfterHit += SpellHitFn(spell_pal_lay_on_hands::HandleScript);
+        OnEffectHitTarget += SpellEffectFn(spell_pal_lay_on_hands::HandleMaxHealthHeal, EFFECT_0, SPELL_EFFECT_HEAL_MAX_HEALTH);
     }
 
     int32 _manaAmount;
@@ -982,7 +1037,7 @@ class spell_pal_righteous_defense : public SpellScript
     SpellCastResult CheckCast()
     {
         Unit* caster = GetCaster();
-        if (caster->GetTypeId() != TYPEID_PLAYER)
+        if (!caster->IsPlayer())
             return SPELL_FAILED_DONT_REPORT;
 
         if (Unit* target = GetExplTargetUnit())
@@ -1071,6 +1126,75 @@ class spell_pal_seal_of_righteousness : public AuraScript
     }
 };
 
+// 42463 - Seal of Vengeance
+// 53739 - Seal of Corruption
+class spell_pal_seal_of_vengeance : public SpellScript
+{
+    PrepareSpellScript(spell_pal_seal_of_vengeance);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_PALADIN_SEAL_OF_VENGEANCE_EFFECT, SPELL_PALADIN_SEAL_OF_CORRUPTION_EFFECT });
+    }
+
+    void HandleScriptEffect(SpellEffIndex /*effIndex*/)
+    {
+        Unit* target = GetExplTargetUnit();
+        uint32 spellId = GetSpell()->GetSpellInfo()->Id;
+        uint32 auraId = (spellId == SPELL_PALADIN_SEAL_OF_VENGEANCE_EFFECT)
+            ? SPELL_PALADIN_HOLY_VENGEANCE
+            : SPELL_PALADIN_BLOOD_CORRUPTION;
+        int32 damage = GetHitDamage();
+        uint8 stacks = 0;
+
+        if (target)
+        {
+            Aura* aura = target->GetAura(auraId, GetCaster()->GetGUID());
+            if (aura)
+                stacks = aura->GetStackAmount();
+
+            damage = ((damage * stacks) / 5);
+
+            SetHitDamage(damage);
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_pal_seal_of_vengeance::HandleScriptEffect, EFFECT_0, SPELL_EFFECT_WEAPON_PERCENT_DAMAGE);
+    }
+};
+
+// 1022 - Hand of Protection
+class spell_pal_hand_of_protection : public SpellScript
+{
+    PrepareSpellScript(spell_pal_hand_of_protection);
+
+    SpellCastResult CheckCast()
+    {
+        Unit* caster = GetCaster();
+
+        if (!caster->GetTarget() || caster->GetTarget() == caster->GetGUID())
+            return SPELL_CAST_OK;
+
+        if (caster->HasStunAura())
+            return SPELL_FAILED_STUNNED;
+
+        if (caster->HasConfuseAura())
+            return SPELL_FAILED_CONFUSED;
+
+        if (caster->GetUnitFlags() & UNIT_FLAG_FLEEING)
+            return SPELL_FAILED_FLEEING;
+
+        return SPELL_CAST_OK;
+    }
+
+    void Register() override
+    {
+        OnCheckCast += SpellCheckCastFn(spell_pal_hand_of_protection::CheckCast);
+    }
+};
+
 void AddSC_paladin_spell_scripts()
 {
     RegisterSpellAndAuraScriptPair(spell_pal_seal_of_command, spell_pal_seal_of_command_aura);
@@ -1098,4 +1222,6 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScript(spell_pal_lay_on_hands);
     RegisterSpellScript(spell_pal_righteous_defense);
     RegisterSpellScript(spell_pal_seal_of_righteousness);
+    RegisterSpellScript(spell_pal_seal_of_vengeance);
+    RegisterSpellScript(spell_pal_hand_of_protection);
 }

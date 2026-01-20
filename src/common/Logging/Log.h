@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -18,12 +18,13 @@
 #ifndef _LOG_H__
 #define _LOG_H__
 
+#include "IoContext.h"
 #include "Define.h"
 #include "LogCommon.h"
 #include "StringFormat.h"
-#include <memory>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 class Appender;
 class Logger;
@@ -68,20 +69,20 @@ public:
     bool SetLogLevel(std::string const& name, int32 level, bool isLogger = true);
 
     template<typename... Args>
-    inline void outMessage(std::string const& filter, LogLevel const level, std::string_view fmt, Args&&... args)
+    inline void outMessage(std::string const& filter, LogLevel const level, Acore::FormatString<Args...> fmt, Args&&... args)
     {
-        _outMessage(filter, level, Acore::StringFormatFmt(fmt, std::forward<Args>(args)...));
+        _outMessage(filter, level, Acore::StringFormat(fmt, std::forward<Args>(args)...));
     }
 
     template<typename... Args>
-    void outCommand(uint32 account, std::string_view fmt, Args&&... args)
+    void outCommand(uint32 account, Acore::FormatString<Args...> fmt, Args&&... args)
     {
         if (!ShouldLog("commands.gm", LOG_LEVEL_INFO))
         {
             return;
         }
 
-        _outCommand(Acore::StringFormatFmt(fmt, std::forward<Args>(args)...), std::to_string(account));
+        _outCommand(Acore::StringFormat(fmt, std::forward<Args>(args)...), std::to_string(account));
     }
 
     void SetRealmId(uint32 id);
@@ -120,7 +121,7 @@ private:
     std::string m_logsTimestamp;
 
     Acore::Asio::IoContext* _ioContext;
-    Acore::Asio::Strand* _strand;
+    std::unique_ptr<Acore::Asio::Strand> _strand;
 };
 
 #define sLog Log::instance()

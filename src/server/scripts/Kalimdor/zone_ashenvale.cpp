@@ -1,29 +1,22 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* ScriptData
-SDName: Ashenvale
-SD%Complete: 70
-SDComment: Quest support: 6544, 6482
-SDCategory: Ashenvale Forest
-EndScriptData */
-
+#include "CreatureScript.h"
 #include "Player.h"
-#include "ScriptMgr.h"
 #include "ScriptedCreature.h"
 #include "ScriptedEscortAI.h"
 
@@ -53,7 +46,9 @@ enum Muglash
     NPC_WRATH_SEAWITCH      = 3715,
 
     NPC_VORSHA              = 12940,
-    NPC_MUGLASH             = 12717
+    NPC_MUGLASH             = 12717,
+
+    ACTION_EXTINGUISH_BLAZIER = 0
 };
 
 Position const FirstNagaCoord[3] =
@@ -88,6 +83,15 @@ public:
             _isBrazierExtinguished = false;
         }
 
+        void DoAction(int32 actionId) override
+        {
+            if (actionId == ACTION_EXTINGUISH_BLAZIER)
+            {
+                Talk(SAY_MUG_BRAZIER_WAIT);
+                _isBrazierExtinguished = true;
+            }
+        }
+
         void JustEngagedWith(Unit* /*who*/) override
         {
             if (Player* player = GetPlayerForEscort())
@@ -117,7 +121,8 @@ public:
             {
                 Talk(SAY_MUG_START1);
                 me->SetFaction(FACTION_ESCORTEE_N_NEUTRAL_PASSIVE);
-                npc_escortAI::Start(true, false, player->GetGUID());
+                me->SetWalk(true);
+                Start(true, player->GetGUID());
             }
         }
 
@@ -202,7 +207,6 @@ public:
     private:
         uint32 eventTimer;
         uint8  waveId;
-    public:
         bool   _isBrazierExtinguished;
     };
 
@@ -212,30 +216,7 @@ public:
     }
 };
 
-class go_naga_brazier : public GameObjectScript
-{
-public:
-    go_naga_brazier() : GameObjectScript("go_naga_brazier") { }
-
-    bool OnGossipHello(Player* /*player*/, GameObject* go) override
-    {
-        if (Creature* creature = GetClosestCreatureWithEntry(go, NPC_MUGLASH, INTERACTION_DISTANCE * 2))
-        {
-            if (npc_muglash::npc_muglashAI* pEscortAI = CAST_AI(npc_muglash::npc_muglashAI, creature->AI()))
-            {
-                creature->AI()->Talk(SAY_MUG_BRAZIER_WAIT);
-
-                pEscortAI->_isBrazierExtinguished = true;
-                return false;
-            }
-        }
-
-        return true;
-    }
-};
-
 void AddSC_ashenvale()
 {
     new npc_muglash();
-    new go_naga_brazier();
 }

@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -23,7 +23,6 @@
 #include "GameObject.h"
 #include "Object.h"
 #include "QuestDef.h"
-#include <list>
 
 class Creature;
 class GameObject;
@@ -47,7 +46,7 @@ public:
 
     // Pass parameters between AI
     virtual void DoAction(int32 /*param = 0 */) {}
-    virtual void SetGUID(ObjectGuid /*guid*/, int32 /*id = 0 */) {}
+    virtual void SetGUID(ObjectGuid const& /*guid*/, int32 /*id = 0 */) {}
     virtual ObjectGuid GetGUID(int32 /*id = 0 */) const { return ObjectGuid::Empty; }
 
     static int32 Permissible(GameObject const* go);
@@ -68,10 +67,12 @@ public:
     virtual bool CanBeSeen(Player const* /*seer*/) { return true; }
 
     // Called when the gameobject summon successfully other creature
-    virtual void JustSummoned(Creature* /*summon*/) { }
-    virtual void SummonedCreatureDespawn(Creature* /*summon*/) { }
+    virtual void JustSummoned(Creature* /*summon*/) {}
+    virtual void SummonedCreatureDespawn(Creature* /*summon*/) {}
 
-    virtual void SummonedCreatureDies(Creature* /*summon*/, Unit* /*killer*/) { }
+    virtual void SummonedCreatureDies(Creature* /*summon*/, Unit* /*killer*/) {}
+
+    virtual void SummonedCreatureEvade(Creature* /*summon*/) {}
 };
 
 class NullGameObjectAI : public GameObjectAI

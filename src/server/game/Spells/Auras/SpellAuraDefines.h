@@ -1,14 +1,14 @@
 /*
  * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Affero General Public License as published by the
- * Free Software Foundation; either version 3 of the License, or (at your
- * option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
@@ -266,12 +266,12 @@ enum AuraType
     SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE               = 203,
     SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE              = 204,
     SPELL_AURA_MOD_SCHOOL_CRIT_DMG_TAKEN                    = 205,
-    SPELL_AURA_MOD_INCREASE_VEHICLE_FLIGHT_SPEED            = 206,
+    SPELL_AURA_MOD_INCREASE_FLIGHT_SPEED                    = 206,
     SPELL_AURA_MOD_INCREASE_MOUNTED_FLIGHT_SPEED            = 207,
-    SPELL_AURA_MOD_INCREASE_FLIGHT_SPEED                    = 208,
+    SPELL_AURA_MOD_FLIGHT_SPEED_ALWAYS                      = 208,
     SPELL_AURA_MOD_MOUNTED_FLIGHT_SPEED_ALWAYS              = 209,
-    SPELL_AURA_MOD_VEHICLE_SPEED_ALWAYS                     = 210,
-    SPELL_AURA_MOD_FLIGHT_SPEED_NOT_STACK                   = 211,
+    SPELL_AURA_MOD_FLIGHT_SPEED_NOT_STACKING                = 210,
+    SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED_NOT_STACKING        = 211,
     SPELL_AURA_MOD_RANGED_ATTACK_POWER_OF_STAT_PERCENT      = 212,
     SPELL_AURA_MOD_RAGE_FROM_DAMAGE_DEALT                   = 213,
     SPELL_AURA_214                                          = 214,
@@ -386,7 +386,7 @@ enum AuraObjectType
     DYNOBJ_AURA_TYPE,
 };
 
-enum AuraRemoveMode
+enum AuraRemoveMode : uint8
 {
     AURA_REMOVE_NONE                = 0,
     AURA_REMOVE_BY_DEFAULT          = 1,    // scripted remove, remove by stack with aura with different ids and sc aura remove
